@@ -5,7 +5,8 @@ Telugu "Did you know?" Reels bot: ONE topic per reel, colourful fact-card style.
 
 Env / secrets:
   IG_ACCESS_TOKEN, IG_USER_ID, IG_GRAPH_HOST   Instagram API
-  PEXELS_API_KEY        free key: real animal/nature footage + photos (strongly recommended)
+  PIXABAY_API_KEY       free key (pixabay.com/api/docs): real animal/nature video + photos (recommended)
+  PEXELS_API_KEY        optional, only if you already have one (Pexels paused new keys)
   ELEVENLABS_API_KEY / ELEVENLABS_VOICE_ID   optional, most natural Telugu voice (model eleven_v3)
   TTS_VOICE             te-IN-ShrutiNeural (default, female) or te-IN-MohanNeural
   ANTHROPIC_API_KEY + AI_FACTS=1   optional: let Claude write NEW subjects when the bank is used up
@@ -642,6 +643,123 @@ def _download(url, path, cap=45 * 1024 * 1024):
                 f.write(chunk)
 
 
+def _add(out, kind, url, ext):
+    path = OUT / f"vis_{len(out)}.{ext}"
+    _download(url, path)
+    out.append((kind, path))
+
+
+def videos_pixabay(subject, out, n):
+    key = os.getenv("PIXABAY_API_KEY")
+    if not key:
+        return
+    for q in subject["pexels"]:
+        if len(out) >= n:
+            return
+        try:
+            r = requests.get("https://pixabay.com/api/videos/", timeout=30,
+                             params={"key": key, "q": q, "per_page": 15, "safesearch": "true"})
+            r.raise_for_status()
+            hits = [h for h in r.json().get("hits", []) if h.get("duration", 0) >= 4]
+            random.shuffle(hits)
+            for h in hits[:4]:
+                v = h.get("videos", {}).get("medium") or h.get("videos", {}).get("small") or {}
+                if v.get("url"):
+                    _add(out, "video", v["url"], "mp4")
+                    break
+        except Exception as e:
+            print(f"Pixabay video '{q}' failed: {e}")
+
+
+def photos_pixabay(subject, out, n):
+    key = os.getenv("PIXABAY_API_KEY")
+    if not key:
+        return
+    for q in subject["pexels"]:
+        if len(out) >= n:
+            return
+        try:
+            r = requests.get("https://pixabay.com/api/", timeout=30,
+                             params={"key": key, "q": q, "image_type": "photo", "orientation": "horizontal",
+                                     "per_page": 12, "safesearch": "true"})
+            r.raise_for_status()
+            hits = r.json().get("hits", [])
+            random.shuffle(hits)
+            for h in hits[:2]:
+                if len(out) < n and h.get("largeImageURL"):
+                    _add(out, "still", h["largeImageURL"], "jpg")
+        except Exception as e:
+            print(f"Pixabay photo '{q}' failed: {e}")
+
+
+def videos_pexels(subject, out, n):
+    key = os.getenv("PEXELS_API_KEY")  # only works if you already have a Pexels key
+    if not key:
+        return
+    for q in subject["pexels"]:
+        if len(out) >= n:
+            return
+        try:
+            r = requests.get("https://api.pexels.com/videos/search", headers={"Authorization": key},
+                             params={"query": q, "per_page": 12}, timeout=30)
+            r.raise_for_status()
+            vids = [v for v in r.json().get("videos", []) if v.get("duration", 0) >= 4]
+            random.shuffle(vids)
+            for v in vids[:3]:
+                files = [f for f in v["video_files"] if f.get("file_type") == "video/mp4" and f.get("width", 0) >= 960]
+                if files:
+                    files.sort(key=lambda f: abs(f["width"] - 1280))
+                    _add(out, "video", files[0]["link"], "mp4")
+                    break
+        except Exception as e:
+            print(f"Pexels video '{q}' failed: {e}")
+
+
+def photos_pexels(subject, out, n):
+    key = os.getenv("PEXELS_API_KEY")
+    if not key:
+        return
+    for q in subject["pexels"]:
+        if len(out) >= n:
+            return
+        try:
+            r = requests.get("https://api.pexels.com/v1/search", headers={"Authorization": key},
+                             params={"query": q, "per_page": 10, "orientation": "landscape"}, timeout=30)
+            r.raise_for_status()
+            photos = r.json().get("photos", [])
+            random.shuffle(photos)
+            for ph in photos[:2]:
+                if len(out) < n:
+                    _add(out, "still", ph["src"]["large2x"], "jpg")
+        except Exception as e:
+            print(f"Pexels photo '{q}' failed: {e}")
+
+
+def photos_openverse(subject, out, n):
+    """No key needed. Only CC0 / public-domain photos, so no credit is required."""
+    for q in subject["pexels"]:
+        if len(out) >= n:
+            return
+        try:
+            r = requests.get("https://api.openverse.org/v1/images/", timeout=30,
+                             headers={"User-Agent": "fact-reel-bot"},
+                             params={"q": q, "license": "cc0,pdm", "page_size": 15, "mature": "false"})
+            r.raise_for_status()
+            res = [x for x in r.json().get("results", []) if x.get("url") and (x.get("width") or 0) >= 900]
+            random.shuffle(res)
+            for x in res[:3]:
+                if len(out) >= n:
+                    break
+                try:
+                    _add(out, "still", x["url"], "jpg")
+                    Image.open(out[-1][1]).verify()
+                except Exception:
+                    if out and out[-1][0] == "still":
+                        out.pop()
+        except Exception as e:
+            print(f"Openverse '{q}' failed: {e}")
+
+
 def fetch_visuals(subject, n=4):
     out = []
     local = pathlib.Path("images") / subject["id"]
@@ -649,46 +767,10 @@ def fetch_visuals(subject, n=4):
         for p in sorted(local.glob("*")):
             if p.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"}:
                 out.append(("still", p))
-    key = os.getenv("PEXELS_API_KEY")
-    if key and len(out) < n:
-        hdr = {"Authorization": key}
-        for q in subject["pexels"]:
-            if len(out) >= n:
-                break
-            try:
-                r = requests.get("https://api.pexels.com/videos/search", headers=hdr,
-                                 params={"query": q, "per_page": 12}, timeout=30)
-                r.raise_for_status()
-                vids = [v for v in r.json().get("videos", []) if v.get("duration", 0) >= 4]
-                random.shuffle(vids)
-                for v in vids[:3]:
-                    files = [f for f in v["video_files"] if f.get("file_type") == "video/mp4" and f.get("width", 0) >= 960]
-                    if not files:
-                        continue
-                    files.sort(key=lambda f: abs(f["width"] - 1280))
-                    path = OUT / f"vis_{len(out)}.mp4"
-                    _download(files[0]["link"], path)
-                    out.append(("video", path))
-                    break
-            except Exception as e:
-                print(f"Pexels video '{q}' failed: {e}")
-        for q in subject["pexels"]:
-            if len(out) >= n:
-                break
-            try:
-                r = requests.get("https://api.pexels.com/v1/search", headers=hdr,
-                                 params={"query": q, "per_page": 10, "orientation": "landscape"}, timeout=30)
-                r.raise_for_status()
-                photos = r.json().get("photos", [])
-                random.shuffle(photos)
-                for ph in photos[:2]:
-                    if len(out) >= n:
-                        break
-                    path = OUT / f"vis_{len(out)}.jpg"
-                    _download(ph["src"]["large2x"], path)
-                    out.append(("still", path))
-            except Exception as e:
-                print(f"Pexels photo '{q}' failed: {e}")
+    for fn in (videos_pixabay, videos_pexels, photos_pixabay, photos_pexels, photos_openverse):
+        if len(out) >= n:
+            break
+        fn(subject, out, n)
     print(f"Visuals found: {len(out)}")
     return out[:n]
 
