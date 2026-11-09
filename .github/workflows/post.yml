@@ -2,6 +2,7 @@ name: Stock news Reel (every 2 hours)
 
 on:
   schedule:
+    # 02:30-16:30 UTC every 2 hours = 08:00, 10:00 ... 22:00 IST
     - cron: "30 2-16/2 * * *"
   workflow_dispatch:
     inputs:
@@ -40,15 +41,10 @@ jobs:
         run: python main.py generate
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-      
-      - name: Save video for preview
-        if: steps.gen.outputs.has_post == 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: reel-preview
-          path: out/reel.mp4
-          retention-days: 3
-          
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+
+      # Instagram must download the video from a public URL. It is pushed to a
+      # throw-away "media" branch (history reset every run) so the repo stays small.
       - name: Host video on the media branch
         if: steps.gen.outputs.has_post == 'true'
         run: |
@@ -73,7 +69,7 @@ jobs:
           IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
           DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && '1' || '0' }}
 
-      - name: Remember posted headlines
+      - name: Remember posted headlines (avoids repeats)
         if: steps.gen.outputs.has_post == 'true'
         run: |
           git config user.name "reel-bot"
