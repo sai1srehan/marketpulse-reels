@@ -1,17 +1,17 @@
 """
-Telugu stock-news Reel bot (trending style).
+Telugu "Did you know?" Reels bot: ONE topic per reel, colourful fact-card style.
 
-Latest Telugu stock-market headlines -> Telugu voiceover (TTS) + animated
-word-by-word captions + moving background + live Nifty line + music
--> Instagram Reel (official Graph API).
+  python main.py generate | publish | all
 
-    python main.py generate | publish | all
-
-Secrets / env:
-    IG_ACCESS_TOKEN, IG_USER_ID, IG_GRAPH_HOST   Instagram API
-    ANTHROPIC_API_KEY   optional: rewrites headlines into short spoken Telugu
-    TTS_VOICE           optional: te-IN-ShrutiNeural (female, default) or te-IN-MohanNeural
-    DRY_RUN=1           build everything but do not post
+Env / secrets:
+  IG_ACCESS_TOKEN, IG_USER_ID, IG_GRAPH_HOST   Instagram API
+  PEXELS_API_KEY        free key: real animal/nature footage + photos (strongly recommended)
+  ELEVENLABS_API_KEY / ELEVENLABS_VOICE_ID   optional, most natural Telugu voice (model eleven_v3)
+  TTS_VOICE             te-IN-ShrutiNeural (default, female) or te-IN-MohanNeural
+  ANTHROPIC_API_KEY + AI_FACTS=1   optional: let Claude write NEW subjects when the bank is used up
+  COOLDOWN_DAYS         days before a subject can repeat (default 30)
+  SUBJECT=<id>          force a subject (testing)
+  DRY_RUN=1             build but do not post
 """
 import asyncio
 import datetime as dt
@@ -26,12 +26,12 @@ import subprocess
 import sys
 import time
 import wave
-import xml.etree.ElementTree as ET
-from email.utils import parsedate_to_datetime
 
 import numpy as np
 import requests
-from PIL import Image, ImageChops, ImageDraw, ImageFont, features
+from PIL import Image, ImageDraw, ImageFilter, ImageFont, features
+
+from facts_data import SUBJECTS
 
 IST = dt.timezone(dt.timedelta(hours=5, minutes=30))
 GRAPH = (os.getenv("IG_GRAPH_HOST", "https://graph.instagram.com").rstrip("/")
@@ -40,96 +40,29 @@ OUT = pathlib.Path("out")
 STATE = pathlib.Path("state/posted.json")
 MUSIC_DIR = pathlib.Path("music")
 W, H, FPS, SR = 1080, 1920, 30, 44100
-NEWS_PER_VIDEO = 3
-MAX_AGE_HOURS = {"default": 22, "jobs": 48, "health": 48}
-SIM_THRESHOLD = 0.34  # trigram similarity above this = "same story"
-TELUGU_RE = re.compile(r"[\u0C00-\u0C7F]")
+FACTS_PER_REEL = 4
+WIN_W, WIN_H, WIN_X, WIN_Y = 940, 760, 70, 440
+NAVY, WHITE, GOLD = (24, 28, 62), (255, 255, 255), (255, 214, 102)
 
-# Headlines containing these are skipped (politics, crime, tragedy): edit freely.
-BLOCKLIST = [
-    "హత్య", "అత్యాచార", "ఆత్మహత్య", "మృతి", "మరణ", "దుర్మరణ", "ప్రమాద", "అరెస్ట్", "కాల్పుల",
-    "ఎన్నిక", "ఓటర్", "వైసీపీ", "టీడీపీ", "బీఆర్ఎస్", "కాంగ్రెస్", "బీజేపీ", "జనసేన", "ముఖ్యమంత్రి",
-    "ఎమ్మెల్యే", "కులం", "మతం", "అల్లర్లు", "నేరం", "పోలీస", "జైలు", "లైంగిక", "వేధింపు", "యుద్ధ", "ఉగ్ర",
-    "murder", "rape", "suicide",
-]
-
-# One topic per video, rotated automatically so the page never feels repetitive.
-TOPICS = {
-    "money": {
-        "label": "మనీ & మార్కెట్", "emoji": "📈", "palette": 3, "disc": "invest",
-        "intro": "ఈ రోజు స్టాక్ మార్కెట్ ముఖ్యాంశాలు ఇవే.",
-        "queries": ["స్టాక్ మార్కెట్ OR సెన్సెక్స్ OR నిఫ్టీ when:1d", "బంగారం ధర OR వెండి ధర when:1d"],
-        "pexels": ["stock market trading", "candlestick chart", "gold coins"],
-        "tags": ["#stockmarkettelugu", "#sharemarket"],
-        "pool": ["#nifty50", "#sensex", "#telugufinance", "#investingtelugu", "#trending", "#telugureels"],
-    },
-    "cinema": {
-        "label": "టాలీవుడ్ అప్‌డేట్స్", "emoji": "🎬", "palette": 2, "disc": None,
-        "intro": "టాలీవుడ్ నుంచి ఈ రోజు హాట్ అప్‌డేట్స్ ఇవే.",
-        "queries": ["టాలీవుడ్ OR తెలుగు సినిమా OR ట్రైలర్ when:1d", "సినిమా రిలీజ్ OR బాక్సాఫీస్ OR ఓటీటీ when:1d"],
-        "pexels": ["movie theatre", "film camera cinema", "red carpet lights"],
-        "tags": ["#tollywood", "#telugucinema"],
-        "pool": ["#telugumovies", "#movienews", "#tollywoodupdates", "#trending", "#telugureels", "#ott"],
-    },
-    "cricket": {
-        "label": "క్రికెట్ & స్పోర్ట్స్", "emoji": "🏏", "palette": 4, "disc": None,
-        "intro": "క్రికెట్ ప్రపంచం నుంచి ఈ రోజు ముఖ్యమైన వార్తలు ఇవే.",
-        "queries": ["క్రికెట్ OR ఐపీఎల్ OR టీమిండియా when:1d", "క్రీడలు OR బ్యాడ్మింటన్ OR ఫుట్‌బాల్ when:1d"],
-        "pexels": ["cricket stadium", "cricket bat ball", "sports crowd stadium"],
-        "tags": ["#cricket", "#telugusports"],
-        "pool": ["#indiancricket", "#teamindia", "#ipl", "#cricketnews", "#trending", "#telugureels"],
-    },
-    "tech": {
-        "label": "టెక్ న్యూస్", "emoji": "📱", "palette": 1, "disc": None,
-        "intro": "టెక్ ప్రపంచంలో ఈ రోజు ఏం జరిగిందో చూద్దాం.",
-        "queries": ["టెక్నాలజీ OR స్మార్ట్‌ఫోన్ OR ఏఐ OR గూగుల్ when:1d", "గాడ్జెట్స్ OR యాప్ OR ఇంటర్నెట్ when:1d"],
-        "pexels": ["technology circuit", "smartphone hands", "artificial intelligence"],
-        "tags": ["#technews", "#telugutech"],
-        "pool": ["#ai", "#smartphones", "#gadgets", "#trending", "#telugureels", "#techtelugu"],
-    },
-    "jobs": {
-        "label": "జాబ్స్ & ఎడ్యుకేషన్", "emoji": "💼", "palette": 0, "disc": None,
-        "intro": "ఉద్యోగాలు, చదువు గురించి ఈ రోజు ముఖ్యమైన అప్‌డేట్స్ ఇవే.",
-        "queries": ["ఉద్యోగ నోటిఫికేషన్ OR జాబ్స్ OR పరీక్ష ఫలితాలు when:2d", "విద్య OR స్కాలర్‌షిప్ OR నియామకాలు when:2d"],
-        "pexels": ["students studying", "job interview office", "graduation"],
-        "tags": ["#jobsintelugu", "#telanganajobs"],
-        "pool": ["#govtjobs", "#jobalert", "#education", "#trending", "#telugureels", "#careertips"],
-    },
-    "health": {
-        "label": "ఆరోగ్యం & లైఫ్‌స్టైల్", "emoji": "🩺", "palette": 4, "disc": "health",
-        "intro": "ఆరోగ్యం గురించి ఈ రోజు తెలుసుకోవాల్సిన విషయాలు ఇవే.",
-        "queries": ["ఆరోగ్య చిట్కాలు OR ఆరోగ్యం when:2d", "డయాబెటిస్ OR ఆహారం OR యోగా when:2d"],
-        "pexels": ["healthy food", "yoga morning", "walking park"],
-        "tags": ["#healthtips", "#teluguhealth"],
-        "pool": ["#wellness", "#healthyliving", "#lifestyle", "#trending", "#telugureels", "#yoga"],
-    },
-    "viral": {
-        "label": "ట్రెండింగ్ న్యూస్", "emoji": "🔥", "palette": 2, "disc": None,
-        "intro": "సోషల్ మీడియాలో ఈ రోజు ట్రెండింగ్ విషయాలు ఇవే.",
-        "queries": ["వైరల్ OR ట్రెండింగ్ when:1d", "వైరల్ వీడియో OR సోషల్ మీడియా when:1d"],
-        "pexels": ["social media phone", "city night lights", "crowd celebration"],
-        "tags": ["#trending", "#viralreels"],
-        "pool": ["#telugu", "#telugureels", "#viral", "#explore", "#teluguupdates", "#news"],
-    },
+# (dark corner, light corner, glow, solid accent)
+THEMES = {
+    "green": ((4, 50, 34), (40, 170, 90), (180, 255, 140), (34, 160, 80)),
+    "blue": ((6, 30, 80), (30, 130, 230), (120, 210, 255), (30, 120, 220)),
+    "yellow": ((70, 40, 0), (245, 180, 20), (255, 235, 120), (225, 150, 0)),
+    "orange": ((70, 22, 0), (240, 110, 20), (255, 190, 110), (225, 95, 15)),
+    "purple": ((30, 10, 60), (130, 70, 220), (200, 150, 255), (120, 60, 210)),
+    "red": ((60, 6, 10), (220, 50, 60), (255, 150, 150), (210, 40, 55)),
+    "teal": ((4, 48, 56), (20, 170, 170), (130, 240, 230), (15, 150, 150)),
+    "pink": ((60, 10, 40), (235, 90, 160), (255, 170, 215), (225, 70, 145)),
+    "gold": ((50, 24, 8), (200, 130, 30), (255, 220, 140), (190, 115, 20)),
+    "indigo": ((10, 12, 50), (70, 80, 200), (160, 170, 255), (70, 80, 200)),
+    "slate": ((16, 24, 40), (90, 110, 150), (180, 200, 235), (80, 100, 145)),
+    "black": ((4, 4, 14), (60, 30, 110), (150, 100, 230), (100, 60, 190)),
 }
-
-WHITE, GREY, GOLD = (255, 255, 255), (190, 198, 214), (255, 214, 102)
-GREEN, RED = (34, 197, 94), (239, 68, 68)
-PALETTES = [  # (dark corner, light corner, glow blobs)
-    ((8, 14, 40), (70, 20, 120), (120, 70, 220)),
-    ((4, 30, 40), (10, 100, 100), (30, 200, 170)),
-    ((30, 8, 40), (150, 30, 80), (255, 90, 120)),
-    ((8, 16, 36), (20, 70, 160), (60, 140, 255)),
-    ((30, 14, 8), (160, 80, 20), (255, 170, 60)),
-]
-
-DISCLAIMER_EN = "Educational content only. Not investment advice. I am not a SEBI registered adviser."
-DISCLAIMER_TE = "ఇది పెట్టుబడి సలహా కాదు. కేవలం సమాచారం కోసమే."
-HEALTH_TE = "ఇది వైద్య సలహా కాదు. ఆరోగ్య సమస్యలకు డాక్టర్‌ను సంప్రదించండి."
-HEALTH_EN = "General information only. Not medical advice. Consult a doctor."
-GENERIC_TE = "వార్తలు పబ్లిక్ సోర్స్‌ల నుంచి సంగ్రహించబడ్డాయి."
-GENERIC_EN = "News summarised from public sources."
-OUTRO_TE = "మరిన్ని అప్‌డేట్స్ కోసం ఫాలో అవ్వండి."
+ANCHOR_TAGS = ["#telugufacts", "#factsintelugu"]
+POOL_TAGS = ["#didyouknow", "#telugureels", "#amazingfacts", "#trending", "#knowledge", "#learnontelugu"]
+NUM_WORDS = {3: "మూడు", 4: "నాలుగు", 5: "ఐదు"}
+OUTRO_TE = "మీకు ఏ నిజం ఎక్కువగా నచ్చింది? కామెంట్‌లో చెప్పండి, ఫాలో అవ్వండి."
 
 
 # ------------------------------------------------------------------ helpers
@@ -147,486 +80,137 @@ def run(cmd):
         raise RuntimeError(f"Command failed: {' '.join(cmd[:3])} ...")
 
 
-def load_state():
-    try:
-        st = json.loads(STATE.read_text())
-    except Exception:
-        st = {}
-    st.setdefault("posted", [])
-    st.setdefault("items", [])
-    st.setdefault("topics", [])
-    return st
-
-
-def save_state(meta):
-    st = load_state()
-    ts = dt.datetime.now(dt.timezone.utc).isoformat()
-    st["posted"] = (st["posted"] + meta["keys"])[-600:]
-    st["items"] = (st["items"] + [{"t": t, "ts": ts, "topic": meta["topic"]} for t in meta["titles"]])[-300:]
-    st["topics"] = (st["topics"] + [meta["topic"]])[-30:]
-    STATE.parent.mkdir(exist_ok=True)
-    STATE.write_text(json.dumps(st, ensure_ascii=False, indent=1))
-
-
-def norm_title(t):
-    return re.sub(r"[^a-z0-9\u0C00-\u0C7F]+", " ", t.lower()).strip()
-
-
-def trigrams(t):
-    x = norm_title(t).replace(" ", "_")
-    return {x[i:i + 3] for i in range(len(x) - 2)}
-
-
-def jaccard(a, b):
-    return len(a & b) / max(1, len(a | b))
-
-
-def is_repeat(tri, others):
-    return any(jaccard(tri, o) >= SIM_THRESHOLD for o in others)
-
-
-# --------------------------------------------------------------------- fonts
-_font_cache = {}
-
-
-def find_te_font():
-    paths = [
-        pathlib.Path("fonts/NotoSansTelugu-Bold.ttf"),
-        pathlib.Path("/usr/share/fonts/truetype/noto/NotoSansTelugu-Bold.ttf"),
-    ]
-    for p in paths:
-        if p.exists():
-            return str(p)
-    print("Telugu font missing, trying to install fonts-noto-core ...")
-    subprocess.run(["sudo", "-n", "apt-get", "install", "-y", "-qq", "fonts-noto-core"],
-                   capture_output=True)
-    for p in paths[1:]:
-        if p.exists():
-            return str(p)
-    raise RuntimeError("Telugu font not found. Add fonts/NotoSansTelugu-Bold.ttf to the repo.")
-
-
-def te_font(size):
-    key = ("te", size)
-    if key not in _font_cache:
-        kw = {"layout_engine": ImageFont.Layout.RAQM} if features.check("raqm") else {}
-        if not kw:
-            print("WARNING: raqm missing, Telugu conjuncts may render incorrectly")
-        _font_cache[key] = ImageFont.truetype(find_te_font(), size, **kw)
-    return _font_cache[key]
-
-
-def latin_font(size):
-    key = ("la", size)
-    if key not in _font_cache:
-        for p in ("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", "DejaVuSans-Bold.ttf"):
-            try:
-                _font_cache[key] = ImageFont.truetype(p, size)
-                break
-            except OSError:
-                continue
-        else:
-            _font_cache[key] = ImageFont.load_default(size)
-    return _font_cache[key]
-
-
-def mixed_font(text, size):
-    return latin_font(size) if text.isascii() else te_font(size)
-
-
-# --------------------------------------------------------------------- news
-def fetch_news(topic_key):
-    topic = TOPICS[topic_key]
-    max_age = dt.timedelta(hours=MAX_AGE_HOURS.get(topic_key, MAX_AGE_HOURS["default"]))
-    now_utc = dt.datetime.now(dt.timezone.utc)
-    items, seen = [], set()
-    for q in topic["queries"]:
-        try:
-            r = requests.get("https://news.google.com/rss/search",
-                             params={"q": q, "hl": "te", "gl": "IN", "ceid": "IN:te"},
-                             timeout=30, headers={"User-Agent": "Mozilla/5.0"})
-            r.raise_for_status()
-            root = ET.fromstring(r.content)
-        except Exception as e:
-            print(f"Feed failed ({topic_key}): {e}")
-            continue
-        for it in root.iter("item"):
-            title = (it.findtext("title") or "").strip()
-            source = (it.findtext("source") or "").strip()
-            if source and title.endswith(f" - {source}"):
-                title = title[: -(len(source) + 3)]
-            elif " - " in title and not source:
-                title, source = title.rsplit(" - ", 1)
-            title = re.split(r"\s*[|｜]\s*", title)[0].strip()
-            if not TELUGU_RE.search(title) or not (15 <= len(title) <= 190):
-                continue
-            if any(b in title.lower() for b in BLOCKLIST):
-                continue
-            try:
-                pub = parsedate_to_datetime(it.findtext("pubDate"))
-                if pub.tzinfo is None:
-                    pub = pub.replace(tzinfo=dt.timezone.utc)
-            except Exception:
-                continue
-            if now_utc - pub > max_age:
-                continue
-            key = hashlib.md5(norm_title(title).encode()).hexdigest()[:16]
-            if key in seen:
-                continue
-            seen.add(key)
-            items.append({"title": title, "source": source or "News", "key": key, "pub": pub})
-    items.sort(key=lambda n: n["pub"], reverse=True)
-    return items
-
-
-def fresh_stories(topic_key, state, extra_lines=()):
-    """Newest stories that are neither posted before nor a re-wording of a recent post."""
-    cutoff = dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=96)
-    recent = []
-    for i in state["items"]:
-        try:
-            if dt.datetime.fromisoformat(i["ts"]) >= cutoff:
-                recent.append(trigrams(i["t"]))
-        except Exception:
-            recent.append(trigrams(i["t"]))
-    recent += [trigrams(x) for x in extra_lines]
-    posted, picked, picked_tri = set(state["posted"]), [], []
-    for n in fetch_news(topic_key):
-        if n["key"] in posted:
-            continue
-        tri = trigrams(n["title"])
-        if is_repeat(tri, recent) or is_repeat(tri, picked_tri):
-            continue
-        picked.append(n)
-        picked_tri.append(tri)
-        if len(picked) >= NEWS_PER_VIDEO:
-            break
-    return picked
-
-
-def recent_ig_lines(user_id, token):
-    """Story lines from our own recent Instagram captions (protects against lost state)."""
-    try:
-        r = requests.get(f"{GRAPH}/{user_id}/media",
-                         params={"fields": "caption", "limit": 25, "access_token": token}, timeout=30)
-        r.raise_for_status()
-        out = []
-        for m in r.json().get("data", []):
-            for ln in (m.get("caption") or "").splitlines():
-                mm = re.match(r"^\d\.\s+(.+?)(?:\s+\([^()]*\))?$", ln.strip())
-                if mm:
-                    out.append(mm.group(1))
-        return out
-    except Exception as e:
-        print(f"Recent-post check skipped: {e}")
-        return []
-
-
-def trim_words(text, n=20):
-    w = text.split()
-    return " ".join(w[:n]) + ("." if len(w) > n else "")
-
-
-def rewrite_te(news):
-    """Short spoken Telugu lines. Falls back to trimmed headlines."""
-    fallback = [trim_words(n["title"]) for n in news]
-    key = os.getenv("ANTHROPIC_API_KEY")
-    if not key:
-        return fallback
-    prompt = (
-        "Rewrite each Telugu news headline below as ONE short sentence in warm, "
-        "conversational spoken Telugu, as a friendly Instagram news presenter would "
-        "say it (simple everyday words, max 16 words, no formal bookish phrases). Use "
-        "only facts in the headline. No advice, no predictions, no opinions. Return ONLY a "
-        "JSON array of Telugu strings in the same order.\n" + json.dumps(fallback, ensure_ascii=False)
-    )
-    try:
-        r = requests.post(
-            "https://api.anthropic.com/v1/messages",
-            headers={"x-api-key": key, "anthropic-version": "2023-06-01",
-                     "content-type": "application/json"},
-            json={"model": os.getenv("CLAUDE_MODEL", "claude-sonnet-5-5"), "max_tokens": 900,
-                  "messages": [{"role": "user", "content": prompt}]}, timeout=60)
-        r.raise_for_status()
-        text = re.sub(r"^```(?:json)?|```$", "", r.json()["content"][0]["text"].strip(), flags=re.M).strip()
-        lines = json.loads(text)
-        if isinstance(lines, list) and len(lines) == len(news) and all(TELUGU_RE.search(str(x)) for x in lines):
-            return [str(x).strip() for x in lines]
-    except Exception as e:
-        print(f"Rewrite skipped: {e}")
-    return fallback
-
-
-def index_moves():
-    try:
-        import yfinance as yf
-    except ImportError:
-        return {}
-    out = {}
-    for name, sym in {"NIFTY 50": "^NSEI", "SENSEX": "^BSESN"}.items():
-        try:
-            s = yf.Ticker(sym).history(period="5d", interval="1d")["Close"].dropna()
-            if len(s) >= 2:
-                out[name] = (float(s.iloc[-1]), (float(s.iloc[-1]) / float(s.iloc[-2]) - 1) * 100)
-        except Exception as e:
-            print(f"Index {name} failed: {e}")
-    return out
-
-
-def nifty_series():
-    try:
-        import yfinance as yf
-        s = yf.Ticker("^NSEI").history(period="5d", interval="30m")["Close"].dropna()
-        vals = [float(x) for x in s.values][-60:]
-        return vals if len(vals) >= 10 else None
-    except Exception as e:
-        print(f"Nifty series failed: {e}")
-        return None
-
-
-# ----------------------------------------------------------------- voiceover
-VOICE_FX = ("highpass=f=90,acompressor=threshold=0.12:ratio=3:attack=5:release=90,"
-            "equalizer=f=3200:t=q:w=1.2:g=2.5,aecho=0.85:0.9:55:0.14")
-
-
-def eleven_tts(text, path):
-    """Most natural option. Needs ELEVENLABS_API_KEY + ELEVENLABS_VOICE_ID (Telugu needs model eleven_v3)."""
-    r = requests.post(
-        f"https://api.elevenlabs.io/v1/text-to-speech/{os.environ['ELEVENLABS_VOICE_ID']}",
-        headers={"xi-api-key": os.environ["ELEVENLABS_API_KEY"], "Content-Type": "application/json",
-                 "Accept": "audio/mpeg"},
-        params={"output_format": "mp3_44100_128"},
-        json={"text": text, "model_id": os.getenv("ELEVENLABS_MODEL", "eleven_v3"),
-              "voice_settings": {"stability": 0.5}},
-        timeout=120)
-    r.raise_for_status()
-    path.write_bytes(r.content)
-
-
-def tts(text, path):
-    if os.getenv("ELEVENLABS_API_KEY") and os.getenv("ELEVENLABS_VOICE_ID"):
-        try:
-            eleven_tts(text, path)
-            if path.stat().st_size > 1000:
-                return
-        except Exception as e:
-            print(f"ElevenLabs failed ({e}); falling back to Edge TTS")
-    voice = os.getenv("TTS_VOICE", "te-IN-ShrutiNeural")
-    try:
-        import edge_tts
-        rate = f"+{random.choice([3, 5, 7, 9])}%"  # slight variation so it is less monotone
-        asyncio.run(edge_tts.Communicate(text, voice, rate=rate).save(str(path)))
-        if path.exists() and path.stat().st_size > 1000:
-            return
-    except Exception as e:
-        print(f"edge-tts failed ({e}); falling back to gTTS")
-    from gtts import gTTS
-    gTTS(text, lang="te").save(str(path))
-
-
-def load_wav_trim(path):
-    with wave.open(str(path)) as w:
-        data = np.frombuffer(w.readframes(w.getnframes()), "<i2").astype(np.float32) / 32768
-    idx = np.where(np.abs(data) > 0.012)[0]
-    if len(idx):
-        data = data[max(0, idx[0] - int(0.03 * SR)): idx[-1] + int(0.05 * SR)]
-    return data
-
-
-def make_voice(segments):
-    """Create each segment's speech, return (voice array, start times, durations)."""
-    GAP = 0.35
-    clips, starts, durs, t = [], [], [], 0.25
-    for i, seg in enumerate(segments):
-        mp3, wav = OUT / f"seg_{i}.mp3", OUT / f"seg_{i}.wav"
-        tts(seg["text"], mp3)
-        cmd = ["ffmpeg", "-y", "-loglevel", "error", "-i", str(mp3), "-ar", str(SR), "-ac", "1"]
-        if os.getenv("VOICE_FX", "1") == "1":  # light compression/EQ/room so it sounds produced
-            cmd += ["-af", VOICE_FX]
-        run(cmd + ["-c:a", "pcm_s16le", str(wav)])
-        data = load_wav_trim(wav)
-        clips.append(data)
-        starts.append(t)
-        durs.append(len(data) / SR)
-        t += len(data) / SR + GAP
-    total = t + 0.6
-    voice = np.zeros(int(total * SR), np.float32)
-    for s, d in zip(starts, clips):
-        i0 = int(s * SR)
-        voice[i0:i0 + len(d)] += d
-    voice = voice / max(1e-9, np.abs(voice).max()) * 0.9
-    return voice, starts, durs, total
-
-
-# --------------------------------------------------------------------- music
-def synth_music(seconds, rng):
-    """Original Indian-flavoured track: tanpura drone + flute melody + tabla-like beat."""
-    n = int(seconds * SR)
-    t = np.arange(n) / SR
-    sa = rng.choice([220.0, 233.08, 246.94])
-    scale = [1, 16 / 15, 5 / 4, 4 / 3, 3 / 2, 8 / 5, 15 / 8, 2]  # Mayamalavagowla
-    out = np.zeros(n)
-    # drone (Sa + Pa) with slow shimmer
-    for f, g in ((sa / 2, 0.22), (sa * 0.75, 0.16), (sa, 0.12)):
-        for h in (1, 2, 3):
-            out += np.sin(2 * np.pi * f * h * t + 0.3 * np.sin(0.5 * t)) * g / h
-    bpm = rng.choice([104, 112, 120])
-    beat = 60 / bpm
-    # flute melody (random walk on the scale)
-    pos, deg = 0.0, rng.randint(2, 4)
-    while pos < seconds - 0.2:
-        dur = beat * rng.choice([0.5, 1, 1, 1.5, 2])
-        deg = max(0, min(len(scale) - 1, deg + rng.choice([-2, -1, -1, 0, 1, 1, 2])))
-        f = sa * 2 * scale[deg]
-        i0, ln = int(pos * SR), int(min(dur * 1.1, seconds - pos) * SR)
-        if ln > 0:
-            tt = np.arange(ln) / SR
-            env = np.minimum(1, tt / 0.06) * np.exp(-1.6 * tt / max(dur, 0.2))
-            vib = 1 + 0.006 * np.sin(2 * np.pi * 5.2 * tt)
-            tone = np.sin(2 * np.pi * f * vib * tt) + 0.25 * np.sin(4 * np.pi * f * vib * tt)
-            out[i0:i0 + ln] += tone * env * 0.26
-        pos += dur
-    # tabla-like percussion
-    kick = np.arange(int(0.35 * SR)) / SR
-    dha = np.sin(2 * np.pi * (60 + 90 * np.exp(-25 * kick)) * kick) * np.exp(-9 * kick)
-    tin = np.sin(2 * np.pi * 420 * kick[:int(0.12 * SR)]) * np.exp(-40 * kick[:int(0.12 * SR)])
-    nrng = np.random.default_rng(rng.randint(0, 10**6))
-    pattern = ["dha", "tin", "tin", "dha", "dha", "tin", "dha", "tin"]
-    for k in range(int(seconds / (beat / 2))):
-        hit = pattern[k % len(pattern)]
-        if not hit:
-            continue
-        i0 = int(k * beat / 2 * SR)
-        snd = (dha * 0.5) if hit == "dha" else (tin * 0.28 + nrng.normal(0, 0.02, len(tin)) * np.exp(-60 * kick[:len(tin)]))
-        seg = min(len(snd), n - i0)
-        if seg > 0:
-            out[i0:i0 + seg] += snd[:seg]
-    return (out / max(1e-9, np.abs(out).max()) * 0.9).astype(np.float32)
-
-
-def get_music(seconds, rng):
-    files = [p for p in sorted(MUSIC_DIR.glob("*"))
-             if p.suffix.lower() in {".mp3", ".wav", ".m4a", ".ogg", ".aac"}]
-    if files:
-        choice = rng.choice(files)
-        print(f"Music: {choice.name}")
-        wav = OUT / "music_user.wav"
-        run(["ffmpeg", "-y", "-loglevel", "error", "-stream_loop", "-1", "-i", str(choice),
-             "-t", str(seconds), "-ar", str(SR), "-ac", "1", "-c:a", "pcm_s16le", str(wav)])
-        with wave.open(str(wav)) as w:
-            m = np.frombuffer(w.readframes(w.getnframes()), "<i2").astype(np.float32) / 32768
-        m = m / max(1e-9, np.abs(m).max()) * 0.9
-    else:
-        print("Music: synthesized Indian-style instrumental")
-        m = synth_music(seconds, rng)
-    out = np.zeros(int(seconds * SR), np.float32)
-    out[:min(len(out), len(m))] = m[:len(out)]
-    return out
-
-
-def mix_audio(voice, music, path):
-    n = len(voice)
-    # duck the music while the voice is speaking
-    k = int(0.3 * SR)
-    c = np.cumsum(np.abs(voice), dtype=np.float64)
-    env = (c[k:] - c[:-k]) / k
-    env = np.concatenate([np.full(k // 2, env[0]), env, np.full(n - len(env) - k // 2, env[-1])])
-    duck = np.clip(env / 0.06, 0, 1)
-    gain = 0.30 - 0.17 * duck
-    fade = np.ones(n)
-    f = int(1.5 * SR)
-    fade[-f:] = np.linspace(1, 0, f)
-    mix = np.clip((voice + music[:n] * gain) * fade, -1, 1)
-    with wave.open(str(path), "wb") as w:
-        w.setnchannels(1)
-        w.setsampwidth(2)
-        w.setframerate(SR)
-        w.writeframes((mix * 32767).astype("<i2").tobytes())
-
-
-# ------------------------------------------------------------------- visuals
-SW, SH = 270, 480
-_yy, _xx = np.mgrid[0:SH, 0:SW].astype(np.float32)
-_yy /= SH
-_xx /= SW
-VIG = (1 - 0.55 * ((_xx - 0.5) ** 2 + (_yy - 0.5) ** 2))[..., None]
-BRAND = os.getenv("BRAND_NAME", "MARKET PULSE")
-
-# darkening layer so captions stay readable over stock footage
-_dy = np.linspace(0, 1, H, dtype=np.float32)[:, None]
-_dm = (0.40 + 0.27 * np.sin(np.pi * _dy)) * np.ones((1, W), np.float32)
-DARK_IMG = Image.fromarray(np.repeat((_dm * 255).astype(np.uint8)[..., None], 3, axis=2))
-
-
-def background(t, pal, flash=0.0):
-    c1, c2, c3 = (np.array(c, np.float32) for c in pal)
-    k = (0.7 * _yy + 0.3 * _xx + 0.06 * np.sin(t * 0.7))[..., None]
-    arr = c1 * (1 - k) + c2 * k
-    for j in range(4):
-        cx = 0.5 + 0.42 * math.sin(t * (0.45 + 0.08 * j) + j * 1.9)
-        cy = 0.5 + 0.42 * math.cos(t * (0.37 + 0.07 * j) + j * 2.4)
-        d2 = ((_xx - cx) * 0.5625) ** 2 + (_yy - cy) ** 2
-        arr += np.exp(-d2 / 0.045)[..., None] * c3 * 0.55
-    arr *= VIG
-    return Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8)).resize((W, H), Image.BICUBIC)
-
-
 def ease_out(k):
     k = max(0.0, min(1.0, k))
     return 1 - (1 - k) ** 3
 
 
-def glass(w, h, r=34, fill=(8, 12, 28, 165), border=(255, 255, 255, 70)):
-    img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-    ImageDraw.Draw(img).rounded_rectangle((0, 0, w - 1, h - 1), r, fill=fill, outline=border, width=2)
-    return img
+def ease_back(k):
+    k = max(0.0, min(1.0, k))
+    c1 = 1.70158
+    return 1 + (c1 + 1) * (k - 1) ** 3 + c1 * (k - 1) ** 2
 
 
-def arrow(d, x, y, size, up, col):
-    pts = [(x, y + size), (x + size, y + size), (x + size / 2, y)] if up else \
-          [(x, y), (x + size, y), (x + size / 2, y + size)]
-    d.polygon(pts, fill=col)
+# -------------------------------------------------------------------- state
+def load_state():
+    try:
+        st = json.loads(STATE.read_text())
+    except Exception:
+        st = {}
+    st.setdefault("used", [])
+    return st
 
 
-def stroke_text(d, xy, text, font, fill, anchor=None, sw=4):
-    d.text(xy, text, font=font, fill=fill, anchor=anchor, stroke_width=sw, stroke_fill=(0, 0, 0, 255))
+def save_state(meta):
+    st = load_state()
+    st["used"].append({"id": meta["subject_id"], "name": meta["subject_name"],
+                       "ts": dt.datetime.now(dt.timezone.utc).isoformat(),
+                       "theme": meta["theme"]})
+    st["used"] = st["used"][-400:]
+    STATE.parent.mkdir(exist_ok=True)
+    STATE.write_text(json.dumps(st, ensure_ascii=False, indent=1))
 
 
-def index_card(name, last, pct, k, w=465, h=150):
-    img = glass(w, h)
-    d = ImageDraw.Draw(img)
-    col = GREEN if pct >= 0 else RED
-    d.text((26, 18), name, font=latin_font(28), fill=GREY)
-    d.text((26, 62), f"{last * k:,.0f}", font=latin_font(52), fill=WHITE)
-    txt = f"{abs(pct) * k:.2f}%"
-    pf = latin_font(30)
-    pw = int(d.textlength(txt, font=pf)) + 66
-    x0 = w - pw - 22
-    d.rounded_rectangle((x0, 22, w - 22, 70), 24, fill=col + (255,))
-    arrow(d, x0 + 18, 36, 20, pct >= 0, WHITE)
-    d.text((x0 + 46, 46), txt, font=pf, fill=WHITE, anchor="lm")
-    return img
+def recent_ig_names(user_id, token):
+    """Subject names already on our Instagram (first caption line), as a backup to the state file."""
+    try:
+        r = requests.get(f"{GRAPH}/{user_id}/media",
+                         params={"fields": "caption", "limit": 25, "access_token": token}, timeout=30)
+        r.raise_for_status()
+        return [(m.get("caption") or "").split("\n")[0] for m in r.json().get("data", [])]
+    except Exception as e:
+        print(f"Recent-post check skipped: {e}")
+        return []
 
 
-def brand_bar(date_label, label):
-    img = Image.new("RGBA", (W, 110), (0, 0, 0, 0))
-    d = ImageDraw.Draw(img)
-    d.ellipse((60, 6, 140, 86), fill=GOLD + (255,))
-    d.text((100, 46), "MP", font=latin_font(34), fill=(20, 24, 48), anchor="mm")
-    stroke_text(d, (165, 4), BRAND, latin_font(40), WHITE, sw=3)
-    stroke_text(d, (165, 56), label, te_font(30), GOLD, sw=3)
-    stroke_text(d, (W - 60, 70), date_label, latin_font(26), WHITE, anchor="ra", sw=3)
-    return img
+def ai_subject(used_names):
+    """Optional: Claude writes a NEW subject. AI facts can contain mistakes: review your page!"""
+    key = os.getenv("ANTHROPIC_API_KEY")
+    if not key or os.getenv("AI_FACTS") != "1":
+        return None
+    prompt = (
+        "Create ONE new 'Did you know?' subject for a Telugu Instagram reel (animals, space, science, "
+        "human body, famous Indian places). It must NOT be one of: " + ", ".join(used_names) + ". "
+        "Write 5 short, simple, well-established TRUE facts in natural spoken Telugu (max 18 words each). "
+        "If you are not sure a fact is true, do not include it. Return ONLY JSON: "
+        '{"name":"Telugu name","about":"Telugu genitive form","theme":"one of ' + "|".join(THEMES) + '",'
+        '"tag":"#englishhashtag","pexels":["english search 1","english search 2"],"facts":["...x5"]}')
+    try:
+        r = requests.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={"x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"},
+            json={"model": os.getenv("CLAUDE_MODEL", "claude-sonnet-5-5"), "max_tokens": 1200,
+                  "messages": [{"role": "user", "content": prompt}]}, timeout=90)
+        r.raise_for_status()
+        text = re.sub(r"^```(?:json)?|```$", "", r.json()["content"][0]["text"].strip(), flags=re.M).strip()
+        s = json.loads(text)
+        assert len(s["facts"]) >= 4 and s["theme"] in THEMES
+        s["id"] = "ai-" + hashlib.md5(s["name"].encode()).hexdigest()[:8]
+        return s
+    except Exception as e:
+        print(f"AI subject failed: {e}")
+        return None
 
 
-def live_pill(dot):
-    img = Image.new("RGBA", (170, 54), (0, 0, 0, 0))
-    d = ImageDraw.Draw(img)
-    d.rounded_rectangle((0, 0, 169, 53), 27, fill=(220, 38, 38, 245))
-    if dot:
-        d.ellipse((20, 16, 42, 38), fill=WHITE)
-    d.text((56, 28), "LIVE", font=latin_font(30), fill=WHITE, anchor="lm")
-    return img
+def choose_subject(state, ig_lines):
+    forced = os.getenv("SUBJECT")
+    if forced:
+        for s in SUBJECTS:
+            if s["id"] == forced:
+                return s
+    now = dt.datetime.now(dt.timezone.utc)
+    cooldown = dt.timedelta(days=int(os.getenv("COOLDOWN_DAYS", "30")))
+    last = {}
+    for u in state["used"]:
+        try:
+            last[u["id"]] = max(last.get(u["id"], dt.datetime.min.replace(tzinfo=dt.timezone.utc)),
+                                dt.datetime.fromisoformat(u["ts"]))
+        except Exception:
+            pass
+    elig = [s for s in SUBJECTS if s["id"] not in last or now - last[s["id"]] > cooldown]
+    elig = [s for s in elig if not any(s["name"] in ln for ln in ig_lines)]
+    if not elig:
+        return ai_subject([s["name"] for s in SUBJECTS] + [u.get("name", "") for u in state["used"]])
+    last_theme = state["used"][-1]["theme"] if state["used"] else None
+    never = [s for s in elig if s["id"] not in last]
+    pool = [s for s in (never or elig) if s["theme"] != last_theme] or (never or elig)
+    return random.choice(pool) if never else min(pool, key=lambda s: last[s["id"]])
+
+
+# -------------------------------------------------------------------- fonts
+_fc = {}
+
+
+def find_te_font():
+    paths = [pathlib.Path("fonts/NotoSansTelugu-Bold.ttf"),
+             pathlib.Path("/usr/share/fonts/truetype/noto/NotoSansTelugu-Bold.ttf")]
+    for p in paths:
+        if p.exists():
+            return str(p)
+    subprocess.run(["sudo", "-n", "apt-get", "install", "-y", "-qq", "fonts-noto-core"], capture_output=True)
+    if paths[1].exists():
+        return str(paths[1])
+    raise RuntimeError("Telugu font missing: add fonts/NotoSansTelugu-Bold.ttf")
+
+
+def te_font(size):
+    if ("te", size) not in _fc:
+        kw = {"layout_engine": ImageFont.Layout.RAQM} if features.check("raqm") else {}
+        _fc[("te", size)] = ImageFont.truetype(find_te_font(), size, **kw)
+    return _fc[("te", size)]
+
+
+def latin_font(size):
+    if ("la", size) not in _fc:
+        for p in ("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", "DejaVuSans-Bold.ttf"):
+            try:
+                _fc[("la", size)] = ImageFont.truetype(p, size)
+                break
+            except OSError:
+                continue
+        else:
+            _fc[("la", size)] = ImageFont.load_default(size)
+    return _fc[("la", size)]
 
 
 LATIN_RE = re.compile(r"[A-Za-z]")
@@ -634,7 +218,6 @@ NEUTRAL = set(" .,:;-–—!?()'\"/&%+#@|•")
 
 
 def text_runs(text):
-    """Split into (chunk, is_latin) runs so each script uses a font that has its glyphs."""
     out, cur, cur_latin = [], "", None
     for ch in text:
         if ch in NEUTRAL or ch.isdigit():
@@ -675,36 +258,6 @@ def draw_mixed(d, xy, text, size, fill, anchor="lt", sw=0, stroke_fill=(0, 0, 0,
         x += d.textlength(r, font=f)
 
 
-def render_chunk(words, active, fnt, max_w=900):
-    size = fnt.size
-    tmp = ImageDraw.Draw(Image.new("RGBA", (10, 10)))
-    space = tmp.textlength(" ", font=fnt)
-    lines, cur = [[]], 0
-    for i, w in enumerate(words):
-        ww = mixed_width(tmp, w, size)
-        if lines[-1] and cur + space + ww > max_w:
-            lines.append([])
-            cur = 0
-        cur += (space if lines[-1] else 0) + ww
-        lines[-1].append((i, w, ww))
-    lh = int(size * 1.5)
-    img = Image.new("RGBA", (max_w + 80, lh * len(lines) + 40), (0, 0, 0, 0))
-    d = ImageDraw.Draw(img)
-    y = 14
-    for ln in lines:
-        total = sum(x[2] for x in ln) + space * (len(ln) - 1)
-        x = (img.width - total) / 2
-        for i, w, ww in ln:
-            if i == active:  # highlighted word gets a gold pill behind it
-                d.rounded_rectangle((x - 12, y + 6, x + ww + 12, y + lh - 8), 26, fill=GOLD + (255,))
-                draw_mixed(d, (x, y), w, size, (18, 20, 40))
-            else:
-                draw_mixed(d, (x, y), w, size, WHITE, sw=7)
-            x += ww + space
-        y += lh
-    return img
-
-
 def pill(text, size, fg, bg, pad=26):
     tmp = ImageDraw.Draw(Image.new("RGBA", (10, 10)))
     w = int(mixed_width(tmp, text, size)) + pad * 2
@@ -716,49 +269,287 @@ def pill(text, size, fg, bg, pad=26):
     return img
 
 
-PANEL_W, PANEL_H = 960, 290
+# ----------------------------------------------------------------- voiceover
+VOICE_FX = ("highpass=f=90,acompressor=threshold=0.12:ratio=3:attack=5:release=90,"
+            "equalizer=f=3200:t=q:w=1.2:g=2.5,aecho=0.85:0.9:55:0.14")
 
 
-def chart_base():
-    img = glass(PANEL_W, PANEL_H, 36)
+def eleven_tts(text, path):
+    r = requests.post(
+        f"https://api.elevenlabs.io/v1/text-to-speech/{os.environ['ELEVENLABS_VOICE_ID']}",
+        headers={"xi-api-key": os.environ["ELEVENLABS_API_KEY"], "Content-Type": "application/json",
+                 "Accept": "audio/mpeg"},
+        params={"output_format": "mp3_44100_128"},
+        json={"text": text, "model_id": os.getenv("ELEVENLABS_MODEL", "eleven_v3"),
+              "voice_settings": {"stability": 0.5}}, timeout=120)
+    r.raise_for_status()
+    path.write_bytes(r.content)
+
+
+def tts(text, path):
+    if os.getenv("ELEVENLABS_API_KEY") and os.getenv("ELEVENLABS_VOICE_ID"):
+        try:
+            eleven_tts(text, path)
+            if path.stat().st_size > 1000:
+                return
+        except Exception as e:
+            print(f"ElevenLabs failed ({e}); using Edge TTS")
+    try:
+        import edge_tts
+        rate = f"+{random.choice([2, 4, 6, 8])}%"
+        asyncio.run(edge_tts.Communicate(text, os.getenv("TTS_VOICE", "te-IN-ShrutiNeural"),
+                                         rate=rate).save(str(path)))
+        if path.exists() and path.stat().st_size > 1000:
+            return
+    except Exception as e:
+        print(f"edge-tts failed ({e}); using gTTS")
+    from gtts import gTTS
+    gTTS(text, lang="te").save(str(path))
+
+
+def load_wav_trim(path):
+    with wave.open(str(path)) as w:
+        data = np.frombuffer(w.readframes(w.getnframes()), "<i2").astype(np.float32) / 32768
+    idx = np.where(np.abs(data) > 0.012)[0]
+    if len(idx):
+        data = data[max(0, idx[0] - int(0.03 * SR)): idx[-1] + int(0.05 * SR)]
+    return data
+
+
+def make_voice(segments):
+    clips, starts, durs, t = [], [], [], 0.3
+    for i, seg in enumerate(segments):
+        mp3, wav = OUT / f"seg_{i}.mp3", OUT / f"seg_{i}.wav"
+        tts(seg["text"], mp3)
+        cmd = ["ffmpeg", "-y", "-loglevel", "error", "-i", str(mp3), "-ar", str(SR), "-ac", "1"]
+        if os.getenv("VOICE_FX", "1") == "1":
+            cmd += ["-af", VOICE_FX]
+        run(cmd + ["-c:a", "pcm_s16le", str(wav)])
+        data = load_wav_trim(wav)
+        clips.append(data)
+        starts.append(t)
+        durs.append(len(data) / SR)
+        t += len(data) / SR + random.uniform(0.35, 0.6)  # natural, uneven pauses
+    total = t + 0.5
+    voice = np.zeros(int(total * SR), np.float32)
+    for s, d in zip(starts, clips):
+        voice[int(s * SR): int(s * SR) + len(d)] += d
+    voice = voice / max(1e-9, np.abs(voice).max()) * 0.9
+    return voice, starts, durs, total
+
+
+# ------------------------------------------------------------ music and sfx
+def synth_music(seconds, rng):
+    """Playful original instrumental: marimba-like melody, soft bass, light percussion."""
+    n = int(seconds * SR)
+    t = np.arange(n) / SR
+    root = rng.choice([261.63, 293.66, 329.63])
+    scale = [1, 9 / 8, 5 / 4, 3 / 2, 5 / 3, 2]  # major pentatonic
+    bpm = rng.choice([108, 116, 124])
+    beat = 60 / bpm
+    out = np.zeros(n)
+    for ci in range(int(seconds / (beat * 4)) + 1):
+        f = root / 2 * rng.choice([1, 4 / 3, 3 / 2, 9 / 8])
+        i0, ln = int(ci * beat * 4 * SR), int(beat * 4 * SR)
+        seg = min(ln, n - i0)
+        if seg > 0:
+            tt = np.arange(seg) / SR
+            out[i0:i0 + seg] += np.sin(2 * np.pi * f * tt) * np.minimum(1, tt / 0.05) * 0.22 * (1 - tt / (beat * 4) * 0.4)
+    pl = np.arange(int(0.5 * SR)) / SR
+    deg = 2
+    for k in range(int(seconds / (beat / 2))):
+        deg = max(0, min(len(scale) - 1, deg + rng.choice([-1, 0, 1, 1, -2, 2])))
+        if rng.random() < 0.8:
+            f = root * 2 * scale[deg]
+            tone = (np.sin(2 * np.pi * f * pl) + 0.35 * np.sin(2 * np.pi * 4 * f * pl)) * np.exp(-9 * pl) * 0.2
+            i0 = int(k * beat / 2 * SR)
+            seg = min(len(tone), n - i0)
+            if seg > 0:
+                out[i0:i0 + seg] += tone[:seg]
+    kick = np.arange(int(0.25 * SR)) / SR
+    thump = np.sin(2 * np.pi * (55 + 80 * np.exp(-30 * kick)) * kick) * np.exp(-12 * kick) * 0.5
+    for k in range(int(seconds / beat)):
+        if k % 2 == 0:
+            i0 = int(k * beat * SR)
+            seg = min(len(thump), n - i0)
+            if seg > 0:
+                out[i0:i0 + seg] += thump[:seg]
+    return (out / max(1e-9, np.abs(out).max()) * 0.9).astype(np.float32)
+
+
+def get_music(seconds, rng):
+    files = [p for p in sorted(MUSIC_DIR.glob("*")) if p.suffix.lower() in {".mp3", ".wav", ".m4a", ".ogg", ".aac"}]
+    if files:
+        choice = rng.choice(files)
+        print(f"Music: {choice.name}")
+        wav = OUT / "music_user.wav"
+        run(["ffmpeg", "-y", "-loglevel", "error", "-stream_loop", "-1", "-i", str(choice), "-t", str(seconds),
+             "-ar", str(SR), "-ac", "1", "-c:a", "pcm_s16le", str(wav)])
+        with wave.open(str(wav)) as w:
+            m = np.frombuffer(w.readframes(w.getnframes()), "<i2").astype(np.float32) / 32768
+        m = m / max(1e-9, np.abs(m).max()) * 0.9
+    else:
+        print("Music: synthesized playful instrumental")
+        m = synth_music(seconds, rng)
+    out = np.zeros(int(seconds * SR), np.float32)
+    out[:min(len(out), len(m))] = m[:len(out)]
+    return out
+
+
+def make_sfx(starts, n, rng):
+    sfx = np.zeros(n, np.float32)
+    wl = int(0.4 * SR)
+    noise = np.random.default_rng(rng.randint(0, 10**6)).normal(0, 1, wl)
+    whoosh = np.convolve(noise, np.ones(30) / 30, mode="same") * np.sin(np.pi * np.linspace(0, 1, wl)) ** 2 * 1.6
+    tt = np.arange(int(0.16 * SR)) / SR
+    pop = np.sin(2 * np.pi * (900 - 4200 * tt) * tt) * np.exp(-28 * tt)
+    for i, s in enumerate(starts):
+        if i > 0:
+            i0 = max(0, int((s - 0.38) * SR))
+            seg = min(wl, n - i0)
+            sfx[i0:i0 + seg] += whoosh[:seg] * 0.5
+        i0 = int((s + 0.02) * SR)
+        seg = min(len(pop), n - i0)
+        if seg > 0:
+            sfx[i0:i0 + seg] += pop[:seg] * 0.55
+    return sfx
+
+
+def mix_audio(voice, music, sfx, path):
+    n = len(voice)
+    k = int(0.3 * SR)
+    c = np.cumsum(np.abs(voice), dtype=np.float64)
+    env = (c[k:] - c[:-k]) / k
+    env = np.concatenate([np.full(k // 2, env[0]), env, np.full(n - len(env) - k // 2, env[-1])])
+    duck = np.clip(env / 0.06, 0, 1)
+    gain = 0.32 - 0.19 * duck
+    fade = np.ones(n)
+    f = int(1.5 * SR)
+    fade[-f:] = np.linspace(1, 0, f)
+    mix = np.clip((voice + music[:n] * gain + sfx[:n] * 0.35) * fade, -1, 1)
+    with wave.open(str(path), "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(SR)
+        w.writeframes((mix * 32767).astype("<i2").tobytes())
+
+
+# ------------------------------------------------------------------- visuals
+SW, SH = 270, 480
+_yy, _xx = np.mgrid[0:SH, 0:SW].astype(np.float32)
+_yy /= SH
+_xx /= SW
+VIG = (1 - 0.45 * ((_xx - 0.5) ** 2 + (_yy - 0.5) ** 2))[..., None]
+
+
+def background(t, theme):
+    c1, c2, c3 = (np.array(c, np.float32) for c in THEMES[theme][:3])
+    k = (0.75 * _yy + 0.25 * _xx + 0.05 * np.sin(t * 0.7))[..., None]
+    arr = c1 * (1 - k) + c2 * k
+    for j in range(4):
+        cx = 0.5 + 0.42 * math.sin(t * (0.45 + 0.08 * j) + j * 1.9)
+        cy = 0.5 + 0.42 * math.cos(t * (0.37 + 0.07 * j) + j * 2.4)
+        arr += np.exp(-(((_xx - cx) * 0.5625) ** 2 + (_yy - cy) ** 2) / 0.05)[..., None] * c3 * 0.5
+    arr *= VIG
+    return Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8)).resize((W, H), Image.BICUBIC)
+
+
+def make_dots():
+    img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
-    d.text((34, 20), "NIFTY 50  -  LAST 5 DAYS", font=latin_font(26), fill=GREY)
-    for gy in (100, 150, 200):
-        d.line((34, gy, PANEL_W - 34, gy), fill=(255, 255, 255, 26), width=1)
-    d.text((PANEL_W // 2, PANEL_H - 24), "Educational only. Not investment advice.",
-           font=latin_font(22), fill=GREY, anchor="mm")
+    for y in range(0, H, 56):
+        for x in range((y // 56 % 2) * 28, W, 56):
+            d.ellipse((x - 5, y - 5, x + 5, y + 5), fill=(255, 255, 255, 24))
     return img
 
 
-def chart_gradient(col):
-    a = np.linspace(120, 0, PANEL_H, dtype=np.float32)[:, None] * np.ones((1, PANEL_W), np.float32)
-    arr = np.zeros((PANEL_H, PANEL_W, 4), np.uint8)
-    arr[..., 0], arr[..., 1], arr[..., 2], arr[..., 3] = col[0], col[1], col[2], a.astype(np.uint8)
-    return Image.fromarray(arr, "RGBA")
+def rounded_mask(w, h, r):
+    m = Image.new("L", (w, h), 0)
+    ImageDraw.Draw(m).rounded_rectangle((0, 0, w - 1, h - 1), r, fill=255)
+    return m
 
 
-def draw_chart(base, grad, series, progress):
-    x0, x1, y0, y1 = 40, PANEL_W - 40, 70, 232
-    lo, hi = min(series), max(series)
-    pts = [(x0 + (x1 - x0) * i / (len(series) - 1),
-            y1 - (y1 - y0) * (v - lo) / max(hi - lo, 1e-9)) for i, v in enumerate(series)]
-    n = max(2, int(len(pts) * min(1, progress) + 0.999))
-    pts = pts[:n]
-    col = GREEN if series[-1] >= series[0] else RED
-    img = base.copy()
-    mask = Image.new("L", img.size, 0)
-    ImageDraw.Draw(mask).polygon(pts + [(pts[-1][0], y1 + 14), (pts[0][0], y1 + 14)], fill=255)
-    layer = Image.new("RGBA", img.size, (0, 0, 0, 0))
-    layer.paste(grad, (0, 0), mask)
-    img.alpha_composite(layer)
+def window_base():
+    """Static shadow + white frame; the photo is pasted on top each frame."""
+    aw, ah = WIN_W + 100, WIN_H + 100
+    base = Image.new("RGBA", (aw, ah), (0, 0, 0, 0))
+    sh = Image.new("RGBA", (aw, ah), (0, 0, 0, 0))
+    ImageDraw.Draw(sh).rounded_rectangle((44, 66, aw - 44, ah - 30), 70, fill=(0, 0, 0, 120))
+    base.alpha_composite(sh.filter(ImageFilter.GaussianBlur(22)))
+    ImageDraw.Draw(base).rounded_rectangle((36, 36, aw - 36, ah - 36), 62, fill=(255, 255, 255, 255))
+    return base
+
+
+def fallback_window(theme, name):
+    c1, c2, c3, solid = THEMES[theme]
+    arr = np.zeros((WIN_H, WIN_W, 3), np.float32)
+    k = np.linspace(0, 1, WIN_H)[:, None, None]
+    arr[:] = np.array(c1, np.float32) * (1 - k) + np.array(c3, np.float32) * k * 0.8
+    img = Image.fromarray(arr.astype(np.uint8))
     d = ImageDraw.Draw(img)
-    d.line(pts, fill=tuple(int(c * 0.4) for c in col) + (255,), width=14, joint="curve")
-    d.line(pts, fill=col + (255,), width=6, joint="curve")
-    px, py = pts[-1]
-    d.ellipse((px - 13, py - 13, px + 13, py + 13), fill=WHITE, outline=col, width=5)
-    val = series[0] + (series[-1] - series[0]) * 0  # label shows the latest plotted value
-    cur = series[min(len(series) - 1, n - 1)]
-    d.text((PANEL_W - 34, 20), f"{cur:,.0f}", font=latin_font(30), fill=WHITE, anchor="ra")
+    for cx, cy, r in ((150, 160, 130), (800, 620, 170), (700, 120, 70)):
+        d.ellipse((cx - r, cy - r, cx + r, cy + r), fill=tuple(min(255, v + 40) for v in solid))
+    draw_mixed(d, (WIN_W // 2, WIN_H // 2), name, 130, WHITE, anchor="mm", sw=8)
+    return img
+
+
+def badge(n, solid):
+    s = 170
+    img = Image.new("RGBA", (s, s), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    pts = []
+    for i in range(24):  # starburst sticker
+        ang = i * math.pi / 12
+        r = s / 2 - (4 if i % 2 else 18)
+        pts.append((s / 2 + r * math.cos(ang), s / 2 + r * math.sin(ang)))
+    d.polygon(pts, fill=GOLD + (255,), outline=(255, 255, 255, 255))
+    d.text((s / 2, s / 2 - 34), "FACT", font=latin_font(30), fill=NAVY, anchor="mm")
+    d.text((s / 2, s / 2 + 22), str(n), font=latin_font(74), fill=NAVY, anchor="mm")
+    return img.rotate(-10, resample=Image.BICUBIC)
+
+
+def ribbon(name, right_text, solid):
+    img = Image.new("RGBA", (960, 150), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    d.rounded_rectangle((0, 0, 959, 149), 44, fill=WHITE + (255,), outline=solid + (255,), width=8)
+    draw_mixed(d, (40, 75), name, 78, NAVY, anchor="lm")
+    p = pill(right_text, 34, WHITE, solid + (255,), pad=26)
+    img.alpha_composite(p, (960 - 34 - p.width, 75 - p.height // 2))
+    return img
+
+
+def caption_card(solid):
+    img = Image.new("RGBA", (960, 300), (0, 0, 0, 0))
+    ImageDraw.Draw(img).rounded_rectangle((0, 0, 959, 299), 52, fill=WHITE + (255,), outline=solid + (255,), width=9)
+    return img
+
+
+def render_chunk(words, active, solid, size=70, max_w=830):
+    tmp = ImageDraw.Draw(Image.new("RGBA", (10, 10)))
+    space = tmp.textlength(" ", font=te_font(size))
+    lines, cur = [[]], 0
+    for i, w in enumerate(words):
+        ww = mixed_width(tmp, w, size)
+        if lines[-1] and cur + space + ww > max_w:
+            lines.append([])
+            cur = 0
+        cur += (space if lines[-1] else 0) + ww
+        lines[-1].append((i, w, ww))
+    lh = int(size * 1.5)
+    img = Image.new("RGBA", (max_w + 80, lh * len(lines) + 30), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    y = 10
+    for ln in lines:
+        total = sum(x[2] for x in ln) + space * (len(ln) - 1)
+        x = (img.width - total) / 2
+        for i, w, ww in ln:
+            if i == active:
+                d.rounded_rectangle((x - 12, y + 6, x + ww + 12, y + lh - 8), 24, fill=solid + (255,))
+                draw_mixed(d, (x, y), w, size, WHITE)
+            else:
+                draw_mixed(d, (x, y), w, size, NAVY)
+            x += ww + space
+        y += lh
     return img
 
 
@@ -766,68 +557,45 @@ def swipe_band():
     bw = 300
     a = np.concatenate([np.linspace(0, 210, bw // 2), np.linspace(210, 0, bw // 2)]).astype(np.uint8)
     arr = np.zeros((H, bw, 4), np.uint8)
-    arr[..., 0], arr[..., 1], arr[..., 2] = 255, 214, 102
-    arr[..., 3] = a[None, :]
+    arr[..., 0], arr[..., 1], arr[..., 2], arr[..., 3] = 255, 255, 255, a[None, :]
     return Image.fromarray(arr, "RGBA")
 
 
-# ------------------------------------------------------------- stock footage
-def fetch_stock_clips(topic_key, n=4):
-    """Optional: free vertical stock videos from Pexels (needs PEXELS_API_KEY)."""
-    key = os.getenv("PEXELS_API_KEY")
-    if not key:
-        return []
-    queries = TOPICS[topic_key]["pexels"] + ["india city night traffic", "city skyline night"]
-    random.shuffle(queries)
-    clips = []
-    for q in queries:
-        if len(clips) >= n:
-            break
-        try:
-            r = requests.get("https://api.pexels.com/videos/search",
-                             headers={"Authorization": key},
-                             params={"query": q, "orientation": "portrait", "size": "medium", "per_page": 15},
-                             timeout=30)
-            r.raise_for_status()
-            vids = [v for v in r.json().get("videos", []) if v.get("duration", 0) >= 5]
-            random.shuffle(vids)
-            for v in vids:
-                files = [f for f in v["video_files"] if f.get("file_type") == "video/mp4"
-                         and f.get("height", 0) >= 1280 and f.get("width", 0) <= 1440]
-                if not files:
-                    continue
-                files.sort(key=lambda f: abs(f["width"] - 1080))
-                path = OUT / f"stock_{len(clips)}.mp4"
-                with requests.get(files[0]["link"], stream=True, timeout=90) as resp:
-                    resp.raise_for_status()
-                    size = 0
-                    with open(path, "wb") as fh:
-                        for chunk in resp.iter_content(1 << 20):
-                            size += len(chunk)
-                            if size > 60 * 1024 * 1024:
-                                raise RuntimeError("clip too large")
-                            fh.write(chunk)
-                clips.append(path)
-                break
-        except Exception as e:
-            print(f"Pexels '{q}' failed: {e}")
-    print(f"Stock clips: {len(clips)}")
-    return clips
+def confetti(d, since, seed, colors):
+    if since > 0.9:
+        return
+    k = ease_out(since / 0.9)
+    r = random.Random(seed)
+    for _ in range(22):
+        ang = r.uniform(0, 2 * math.pi)
+        dist = r.uniform(200, 560) * k
+        x = W / 2 + math.cos(ang) * dist
+        y = 820 + math.sin(ang) * dist * 0.85 + 90 * k * k
+        sz = r.uniform(9, 20) * (1 - 0.7 * k)
+        col = r.choice(colors)
+        if r.random() < 0.5:
+            d.ellipse((x - sz, y - sz, x + sz, y + sz), fill=col)
+        else:
+            d.polygon([(x, y - sz * 1.4), (x + sz, y), (x, y + sz * 1.4), (x - sz, y)], fill=col)
 
 
-class BgReader:
+# ------------------------------------------------------- footage and photos
+WINSZ = (WIN_W, WIN_H)
+
+
+class VideoVisual:
     def __init__(self, path):
         self.p = subprocess.Popen(
-            ["ffmpeg", "-loglevel", "error", "-stream_loop", "-1", "-i", str(path),
-             "-vf", f"scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},fps={FPS}",
+            ["ffmpeg", "-loglevel", "error", "-stream_loop", "-1", "-i", str(path), "-vf",
+             f"scale={WIN_W}:{WIN_H}:force_original_aspect_ratio=increase,crop={WIN_W}:{WIN_H},fps={FPS}",
              "-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
-            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, bufsize=W * H * 3 * 2)
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, bufsize=WIN_W * WIN_H * 3 * 2)
 
-    def read(self):
-        buf = self.p.stdout.read(W * H * 3)
-        if len(buf) < W * H * 3:
+    def frame(self, t):
+        buf = self.p.stdout.read(WIN_W * WIN_H * 3)
+        if len(buf) < WIN_W * WIN_H * 3:
             return None
-        return Image.frombuffer("RGB", (W, H), buf, "raw", "RGB", 0, 1)
+        return Image.frombuffer("RGB", WINSZ, buf, "raw", "RGB", 0, 1)
 
     def close(self):
         try:
@@ -836,157 +604,201 @@ class BgReader:
             pass
 
 
+class StillVisual:
+    def __init__(self, path):
+        img = Image.open(path).convert("RGB")
+        s = max(WIN_W * 1.3 / img.width, WIN_H * 1.3 / img.height, 1.0)
+        self.img = img.resize((int(img.width * s), int(img.height * s)), Image.LANCZOS) if s > 1 else img
+        self.dir = random.choice([-1, 1])
+
+    def frame(self, t):
+        z = 1.0 + 0.10 * min(1.0, t / 6)
+        cw, ch = self.img.width / z, self.img.height / z
+        # keep window aspect
+        ar = WIN_W / WIN_H
+        if cw / ch > ar:
+            cw = ch * ar
+        else:
+            ch = cw / ar
+        cx = self.img.width / 2 + self.dir * (self.img.width - cw) / 2 * (t / 8 - 0.5)
+        cy = self.img.height / 2
+        box = (cx - cw / 2, cy - ch / 2, cx + cw / 2, cy + ch / 2)
+        box = (max(0, box[0]), max(0, box[1]), min(self.img.width, box[2]), min(self.img.height, box[3]))
+        return self.img.crop(tuple(int(v) for v in box)).resize(WINSZ, Image.BILINEAR)
+
+    def close(self):
+        pass
+
+
+def _download(url, path, cap=45 * 1024 * 1024):
+    with requests.get(url, stream=True, timeout=90) as r:
+        r.raise_for_status()
+        size = 0
+        with open(path, "wb") as f:
+            for chunk in r.iter_content(1 << 20):
+                size += len(chunk)
+                if size > cap:
+                    raise RuntimeError("file too large")
+                f.write(chunk)
+
+
+def fetch_visuals(subject, n=4):
+    out = []
+    local = pathlib.Path("images") / subject["id"]
+    if local.exists():
+        for p in sorted(local.glob("*")):
+            if p.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"}:
+                out.append(("still", p))
+    key = os.getenv("PEXELS_API_KEY")
+    if key and len(out) < n:
+        hdr = {"Authorization": key}
+        for q in subject["pexels"]:
+            if len(out) >= n:
+                break
+            try:
+                r = requests.get("https://api.pexels.com/videos/search", headers=hdr,
+                                 params={"query": q, "per_page": 12}, timeout=30)
+                r.raise_for_status()
+                vids = [v for v in r.json().get("videos", []) if v.get("duration", 0) >= 4]
+                random.shuffle(vids)
+                for v in vids[:3]:
+                    files = [f for f in v["video_files"] if f.get("file_type") == "video/mp4" and f.get("width", 0) >= 960]
+                    if not files:
+                        continue
+                    files.sort(key=lambda f: abs(f["width"] - 1280))
+                    path = OUT / f"vis_{len(out)}.mp4"
+                    _download(files[0]["link"], path)
+                    out.append(("video", path))
+                    break
+            except Exception as e:
+                print(f"Pexels video '{q}' failed: {e}")
+        for q in subject["pexels"]:
+            if len(out) >= n:
+                break
+            try:
+                r = requests.get("https://api.pexels.com/v1/search", headers=hdr,
+                                 params={"query": q, "per_page": 10, "orientation": "landscape"}, timeout=30)
+                r.raise_for_status()
+                photos = r.json().get("photos", [])
+                random.shuffle(photos)
+                for ph in photos[:2]:
+                    if len(out) >= n:
+                        break
+                    path = OUT / f"vis_{len(out)}.jpg"
+                    _download(ph["src"]["large2x"], path)
+                    out.append(("still", path))
+            except Exception as e:
+                print(f"Pexels photo '{q}' failed: {e}")
+    print(f"Visuals found: {len(out)}")
+    return out[:n]
+
+
+def open_visual(item):
+    kind, path = item
+    return VideoVisual(path) if kind == "video" else StillVisual(path)
+
+
 # ---------------------------------------------------------------- video build
-def build_chunks(segments, starts, durs):
-    fnt = te_font(86)
+def build_chunks(segments, starts, durs, solid):
     chunks = []
     for si, seg in enumerate(segments):
         words = seg["text"].split()
         weights = [len(w) + 1.5 for w in words]
-        tot = sum(weights)
-        acc, wstart = 0.0, []
+        tot, acc, wstart = sum(weights), 0.0, []
         for wt in weights:
             wstart.append(starts[si] + durs[si] * acc / tot)
             acc += wt
-        for i in range(0, len(words), 4):
-            cw = words[i:i + 4]
-            ws = wstart[i:i + 4]
-            end = wstart[i + 4] if i + 4 < len(words) else starts[si] + durs[si] + 0.15
-            chunks.append({"seg": si, "words": cw, "starts": ws, "end": end,
-                           "imgs": [render_chunk(cw, a, fnt) for a in range(len(cw))]})
+        for i in range(0, len(words), 3):
+            cw, ws = words[i:i + 3], wstart[i:i + 3]
+            end = wstart[i + 3] if i + 3 < len(words) else starts[si] + durs[si] + 0.2
+            chunks.append({"words": cw, "starts": ws, "end": end,
+                           "imgs": [render_chunk(cw, a, solid) for a in range(len(cw))]})
     return chunks
 
 
-def topic_card(text, n):
-    img = glass(960, 150)
-    d = ImageDraw.Draw(img)
-    d.text((40, 75), text, font=te_font(54), fill=WHITE, anchor="lm")
-    d.rounded_rectangle((960 - 40 - 150, 45, 960 - 40, 105), 30, fill=GOLD + (255,))
-    d.text((960 - 40 - 75, 75), f"TOP {n}", font=latin_font(32), fill=(18, 20, 40), anchor="mm")
-    return img
+def render_video(segments, starts, durs, total, audio_path, out_path, subject, visual_items, fact_no):
+    theme = subject["theme"]
+    solid = THEMES[theme][3]
+    chunks = build_chunks(segments, starts, durs, solid)
+    dots, base, wmask = make_dots(), window_base(), rounded_mask(WIN_W, WIN_H, 46)
+    fb = fallback_window(theme, subject["name"])
+    chip = pill(f"FACT FILE #{fact_no:02d}", 32, WHITE, solid + (255,), pad=24)
+    n_facts = sum(1 for s in segments if s["kind"] == "fact")
+    ribbons = []
+    for sg in segments:
+        right = "FACTS" if sg["kind"] == "intro" else "FOLLOW" if sg["kind"] == "outro" else f"{sg['n']}/{n_facts}"
+        ribbons.append(ribbon(subject["name"], right, solid))
+    badges = {sg["n"]: badge(sg["n"], solid) for sg in segments if sg["kind"] == "fact"}
+    card, band = caption_card(solid), swipe_band()
+    sparkle = [WHITE, GOLD, tuple(min(255, v + 60) for v in THEMES[theme][2])]
+    bounds = [x - 0.3 for x in starts] + [total]
 
-
-def info_panel(n_news, cur):
-    img = glass(PANEL_W, 230, 36)
-    d = ImageDraw.Draw(img)
-    d.text((PANEL_W // 2, 56), "ప్రతిరోజూ కొత్త తెలుగు అప్‌డేట్స్", font=te_font(38), fill=WHITE, anchor="mm")
-    gap = 130
-    x0 = PANEL_W // 2 - gap * (n_news - 1) // 2
-    for i in range(n_news):
-        cx, on = x0 + i * gap, (i + 1 == cur)
-        d.ellipse((cx - 32, 110, cx + 32, 174), fill=GOLD + (255,) if on else (255, 255, 255, 40),
-                  outline=(255, 255, 255, 100), width=2)
-        d.text((cx, 142), str(i + 1), font=latin_font(34), fill=(18, 20, 40) if on else GREY, anchor="mm")
-    return img
-
-
-def render_video(segments, starts, durs, total, audio_path, out_path, moves, series, rng,
-                 clips=None, date_label="", topic=None):
-    topic = topic or TOPICS["money"]
-    clips = clips or []
-    n_news = sum(1 for sg in segments if sg["kind"] == "news")
-    chunks = build_chunks(segments, starts, durs)
-    bar = brand_bar(date_label, topic["label"])
-    live = [live_pill(True), live_pill(False)]
-    pals = [PALETTES[(topic["palette"] + i) % len(PALETTES)] for i in range(len(segments))]
-    chips = []
-    for seg in segments:
-        if seg["kind"] == "news":
-            chips.append(pill(f"వార్త {seg['n']}  -  {seg['source']}"[:44], 36, (18, 20, 40), GOLD + (255,)))
-        else:
-            chips.append(None)
-    follow = pill("ఫాలో అవ్వండి", 64, (18, 20, 40), GOLD + (255,), pad=60)
-    band = swipe_band()
-    base = chart_base() if series else None
-    grad = chart_gradient(GREEN if series[-1] >= series[0] else RED) if series else None
-    card_items = list(moves.items())
-    final_cards = [index_card(n, v[0], v[1], 1.0) for n, v in card_items]
-    if not card_items:  # non-market topics: topic card + numbered panel instead of cards/chart
-        tcard = topic_card(f"ఈ రోజు టాప్ {n_news} అప్‌డేట్స్", n_news)
-        panels = [info_panel(n_news, sg.get("n", 0) if sg["kind"] == "news" else 0) for sg in segments]
-    bounds = [x - 0.25 for x in starts] + [total]
-
-    n_frames = int(total * FPS)
     log = open(OUT / "ffmpeg.log", "w")
     proc = subprocess.Popen(
-        ["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24",
-         "-s", f"{W}x{H}", "-r", str(FPS), "-i", "-", "-i", str(audio_path),
-         "-map", "0:v", "-map", "1:a", "-c:v", "libx264", "-preset", "veryfast", "-crf", "21",
-         "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", "-ac", "2", "-shortest",
-         "-movflags", "+faststart", str(out_path)],
-        stdin=subprocess.PIPE, stderr=log)
-    ci, reader, reader_seg = 0, None, -1
-    for fi in range(n_frames):
+        ["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}",
+         "-r", str(FPS), "-i", "-", "-i", str(audio_path), "-map", "0:v", "-map", "1:a", "-c:v", "libx264",
+         "-preset", "veryfast", "-crf", "21", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", "-ac", "2",
+         "-shortest", "-movflags", "+faststart", str(out_path)], stdin=subprocess.PIPE, stderr=log)
+    ci, vis, vis_seg = 0, None, -1
+    for fi in range(int(total * FPS)):
         t = fi / FPS
-        si = max([i for i, x in enumerate(starts) if t >= x - 0.25] or [0])
+        si = max([i for i, x in enumerate(starts) if t >= x - 0.3] or [0])
         since = t - bounds[si]
+        sg = segments[si]
 
-        frame = None
-        if clips:
-            if reader_seg != si:
-                if reader:
-                    reader.close()
-                reader, reader_seg = BgReader(clips[si % len(clips)]), si
-            raw = reader.read()
-            if raw is not None:
-                frame = ImageChops.multiply(raw, DARK_IMG)
-        if frame is None:
-            frame = background(t, pals[si])
-
-        frame.paste(bar, (0, 165), bar)
-        lp = live[0 if int(t * 2) % 2 == 0 else 1]
-        frame.paste(lp, (W - 230, 175), lp)
+        frame = background(t, theme)
+        frame.paste(dots, (0, 0), dots)
         d = ImageDraw.Draw(frame)
+
+        # progress bar + chip
         seg_w = (W - 120 - 8 * (len(segments) - 1)) / len(segments)
         for i in range(len(segments)):
             x0 = 60 + i * (seg_w + 8)
-            d.rounded_rectangle((x0, 142, x0 + seg_w, 150), 4, fill=(110, 114, 130))
+            d.rounded_rectangle((x0, 142, x0 + seg_w, 150), 4, fill=(255, 255, 255, 90) if False else tuple(int(v * 0.55 + 90) for v in THEMES[theme][0]))
             fill = min(1.0, max(0.0, (t - bounds[i]) / (bounds[i + 1] - bounds[i])))
             if fill > 0:
-                d.rounded_rectangle((x0, 142, x0 + max(8, seg_w * fill), 150), 4, fill=GOLD)
+                d.rounded_rectangle((x0, 142, x0 + max(8, seg_w * fill), 150), 4, fill=WHITE)
+        frame.paste(chip, (60, 172), chip)
+        rb = ribbons[si]
+        frame.paste(rb, (60, 262), rb)
 
-        if card_items:
-            k = ease_out((t - 0.2) / 1.3)
-            for i, (name, (last, pct)) in enumerate(card_items):
-                img = final_cards[i] if k >= 1 else index_card(name, last, pct, k)
-                frame.paste(img, (60 + i * 495, 300), img)
-        else:
-            frame.paste(tcard, (60, 300), tcard)
+        # framed photo window with pop-in
+        if vis_seg != si:
+            if vis:
+                vis.close()
+            vis, vis_seg = (open_visual(visual_items[si % len(visual_items)]) if visual_items else None), si
+        win = vis.frame(max(0.0, since)) if vis else None
+        if win is None:
+            win = fb
+        asm = base.copy()
+        asm.paste(win, (50, 50), wmask)
+        sc = 0.88 + 0.12 * ease_back(since / 0.45)
+        if abs(sc - 1) > 0.002:
+            asm = asm.resize((int(asm.width * sc), int(asm.height * sc)), Image.BILINEAR)
+        frame.paste(asm, (int(WIN_X - 50 + (WIN_W + 100 - asm.width) / 2), int(WIN_Y - 50 + (WIN_H + 100 - asm.height) / 2)), asm)
 
-        if chips[si]:
-            slide = ease_out(since / 0.35)
-            frame.paste(chips[si], (int(60 - (1 - slide) * 700), 500), chips[si])
+        if sg["kind"] == "fact":
+            bs = max(0.05, ease_back((since - 0.15) / 0.5))
+            b = badges[sg["n"]]
+            b = b.resize((max(1, int(b.width * bs)), max(1, int(b.height * bs))), Image.BILINEAR)
+            frame.paste(b, (WIN_X + WIN_W - 130 - b.width // 2, WIN_Y + WIN_H - 120 - b.height // 2), b)
 
-        if series:
-            panel = draw_chart(base, grad, series, t / total)
-            frame.paste(panel, ((W - PANEL_W) // 2, 1225), panel)
-        elif not card_items:
-            frame.paste(panels[si], ((W - PANEL_W) // 2, 1260), panels[si])
-
+        # caption card with word-by-word highlight
+        frame.paste(card, (60, 1245), card)
         while ci < len(chunks) - 1 and t >= chunks[ci]["end"]:
             ci += 1
         ch = chunks[ci]
         if ch["starts"][0] - 0.05 <= t < ch["end"]:
             ai = max(i for i, x in enumerate(ch["starts"]) if t >= x - 0.05)
             img = ch["imgs"][ai]
-            kk = min(1.0, (t - ch["starts"][ai] + 0.05) / 0.12)
-            sc = 0.86 + 0.14 * ease_out(kk)
-            if sc < 0.999:
-                img = img.resize((int(img.width * sc), int(img.height * sc)), Image.LANCZOS)
-            frame.paste(img, ((W - img.width) // 2, 880 - img.height // 2), img)
+            frame.paste(img, ((W - img.width) // 2, 1245 + (300 - img.height) // 2), img)
 
-        if segments[si]["kind"] == "outro" and t >= starts[si]:
-            sc2 = 1 + 0.05 * math.sin(t * 7)
-            fb = follow.resize((int(follow.width * sc2), int(follow.height * sc2)), Image.LANCZOS)
-            frame.paste(fb, ((W - fb.width) // 2, 1110 - fb.height // 2), fb)
-
+        confetti(d, since, 1000 + si, sparkle)
         if si > 0 and since < 0.4:
-            x = int(-300 + (W + 300) * ease_out(since / 0.4))
-            frame.paste(band, (x, 0), band)
-
+            frame.paste(band, (int(-300 + (W + 300) * ease_out(since / 0.4)), 0), band)
         proc.stdin.write(frame.tobytes())
-    if reader:
-        reader.close()
+    if vis:
+        vis.close()
     proc.stdin.close()
     if proc.wait() != 0:
         print(open(OUT / "ffmpeg.log").read()[-2000:])
@@ -994,71 +806,46 @@ def render_video(segments, starts, durs, total, audio_path, out_path, moves, ser
 
 
 # ------------------------------------------------------------------ commands
-def pick_topic(state, ig_lines):
-    forced = os.getenv("TOPIC")
-    if forced in TOPICS:
-        order = [forced]
-    else:  # least-recently-used topics first, random tie-break
-        recent = state["topics"][-8:]
-        order = sorted(TOPICS, key=lambda k: (recent.count(k), random.random()))
-    for tk in order:
-        fresh = fresh_stories(tk, state, ig_lines)
-        print(f"Topic {tk}: {len(fresh)} fresh stories")
-        if len(fresh) >= 2:
-            return tk, fresh
-    return None, []
-
-
 def generate():
     OUT.mkdir(exist_ok=True)
     state = load_state()
     ig_lines = []
     if os.getenv("IG_ACCESS_TOKEN"):
-        ig_lines = recent_ig_lines(os.getenv("IG_USER_ID") or "me", os.environ["IG_ACCESS_TOKEN"])
-    topic_key, fresh = pick_topic(state, ig_lines)
-    if not topic_key:
-        print("No topic has 2+ fresh, non-repeated stories right now. Skipping this run.")
+        ig_lines = recent_ig_names(os.getenv("IG_USER_ID") or "me", os.environ["IG_ACCESS_TOKEN"])
+    subject = choose_subject(state, ig_lines)
+    if not subject:
+        print("No unused subject available (all are in cooldown). Add more in facts_data.py. Skipping.")
         set_output("has_post", "false")
         return
-    topic = TOPICS[topic_key]
-    print(f"Chosen topic: {topic_key}")
-    lines = rewrite_te(fresh)
+    print(f"Subject: {subject['name']} ({subject['id']})")
+    idx = sorted(random.sample(range(len(subject["facts"])), min(FACTS_PER_REEL, len(subject["facts"]))))
+    facts = [subject["facts"][i] for i in idx]
     now = dt.datetime.now(IST)
     rng = random.Random(int(now.timestamp()))
+    fact_no = len(state["used"]) + 1
 
-    outro = OUTRO_TE + (" " + DISCLAIMER_TE if topic["disc"] == "invest" else
-                        " " + "ఇది వైద్య సలహా కాదు." if topic["disc"] == "health" else "")
-    segments = [{"kind": "intro", "text": topic["intro"]}]
-    for i, (ln, n) in enumerate(zip(lines, fresh), 1):
-        segments.append({"kind": "news", "text": ln, "source": n["source"], "n": i})
-    segments.append({"kind": "outro", "text": outro})
+    intro = f"{subject['about']} గురించి మీకు తెలియని {NUM_WORDS.get(len(facts), 'కొన్ని')} నిజాలు. చివరి వరకు చూడండి!"
+    segments = [{"kind": "intro", "text": intro}]
+    segments += [{"kind": "fact", "text": f, "n": i} for i, f in enumerate(facts, 1)]
+    segments.append({"kind": "outro", "text": OUTRO_TE})
 
     voice, starts, durs, total = make_voice(segments)
     music = get_music(total, rng)
+    sfx = make_sfx(starts, len(voice), rng)
     audio = OUT / "audio.wav"
-    mix_audio(voice, music, audio)
-    money = topic_key == "money"
-    render_video(segments, starts, durs, total, audio, OUT / "reel.mp4",
-                 index_moves() if money else {}, nifty_series() if money else None, rng,
-                 clips=fetch_stock_clips(topic_key), date_label=now.strftime("%d %b %Y"), topic=topic)
+    mix_audio(voice, music, sfx, audio)
+    items = fetch_visuals(subject)
+    render_video(segments, starts, durs, total, audio, OUT / "reel.mp4", subject, items, fact_no)
 
-    if topic["disc"] == "invest":
-        disc = [DISCLAIMER_TE, DISCLAIMER_EN]
-    elif topic["disc"] == "health":
-        disc = [HEALTH_TE, HEALTH_EN]
-    else:
-        disc = [GENERIC_TE, GENERIC_EN]
-    tags = " ".join(topic["tags"] + rng.sample(topic["pool"], 3))
+    tags = " ".join(ANCHOR_TAGS + [subject["tag"]] + rng.sample(POOL_TAGS, 2))
     caption = "\n".join(
-        [f"{topic['emoji']} {topic['label']} | {now.strftime('%d %b %Y')}", ""]
-        + [f"{i}. {ln} ({n['source']})" for i, (ln, n) in enumerate(zip(lines, fresh), 1)]
-        + [""] + disc + ["", tags]
-    )[:2200]
+        [f"📌 {subject['name']} గురించి మీకు తెలియని {NUM_WORDS.get(len(facts), 'కొన్ని')} నిజాలు", ""]
+        + [f"{i}. {f}" for i, f in enumerate(facts, 1)]
+        + ["", "మీకు ఏ నిజం నచ్చింది? కామెంట్ చేయండి 👇 ఫాలో అవ్వండి!", "", tags])[:2200]
     name = f"reel-{now.strftime('%Y%m%d-%H%M')}.mp4"
     (OUT / "meta.json").write_text(json.dumps(
-        {"caption": caption, "video_name": name, "keys": [n["key"] for n in fresh],
-         "titles": [n["title"] for n in fresh], "lines": lines, "topic": topic_key},
-        ensure_ascii=False))
+        {"caption": caption, "video_name": name, "subject_id": subject["id"],
+         "subject_name": subject["name"], "theme": subject["theme"]}, ensure_ascii=False))
     print(f"Built out/reel.mp4 ({os.path.getsize(OUT / 'reel.mp4') / 1e6:.1f} MB, {total:.0f}s)")
     set_output("has_post", "true")
     set_output("video_name", name)
@@ -1090,27 +877,17 @@ def publish():
         return
     user_id = os.getenv("IG_USER_ID") or "me"
     token = os.environ["IG_ACCESS_TOKEN"]
-
-    # last safety net: never post a story set we already posted on Instagram
-    ig_lines = recent_ig_lines(user_id, token)
-    if ig_lines:
-        tris = [trigrams(x) for x in ig_lines]
-        dup = sum(1 for ln in meta["lines"] if is_repeat(trigrams(ln), tris))
-        if dup >= 2:
-            print("These stories look like a repeat of recent posts. Skipping publish.")
-            save_state(meta)
-            return
-
+    if any(meta["subject_name"] in ln for ln in recent_ig_names(user_id, token)):
+        print("This subject was already posted recently. Skipping publish.")
+        save_state(meta)
+        return
     repo = os.environ["GITHUB_REPOSITORY"]
-    branch = os.getenv("MEDIA_BRANCH", "media")
-    url = f"https://raw.githubusercontent.com/{repo}/{branch}/{meta['video_name']}"
+    url = f"https://raw.githubusercontent.com/{repo}/{os.getenv('MEDIA_BRANCH', 'media')}/{meta['video_name']}"
     wait_until_public(url)
-
     container = api("POST", f"{user_id}/media", media_type="REELS", video_url=url,
                     caption=meta["caption"], share_to_feed="true", access_token=token)["id"]
     for _ in range(60):
-        st = requests.get(f"{GRAPH}/{container}",
-                          params={"fields": "status_code,status", "access_token": token},
+        st = requests.get(f"{GRAPH}/{container}", params={"fields": "status_code,status", "access_token": token},
                           timeout=30).json()
         code = st.get("status_code")
         if code == "FINISHED":
