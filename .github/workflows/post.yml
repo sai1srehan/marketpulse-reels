@@ -40,7 +40,15 @@ jobs:
         run: python main.py generate
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-
+      
+      - name: Save video for preview
+        if: steps.gen.outputs.has_post == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: reel-preview
+          path: out/reel.mp4
+          retention-days: 3
+          
       - name: Host video on the media branch
         if: steps.gen.outputs.has_post == 'true'
         run: |
