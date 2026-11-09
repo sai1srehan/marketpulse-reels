@@ -2,3 +2,5 @@ yfinance>=0.2.50
 pillow>=10.1
 requests>=2.31
 numpy>=1.26
+edge-tts>=6.1.9
+gTTS>=2.5.1
