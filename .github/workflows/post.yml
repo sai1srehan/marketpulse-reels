@@ -67,6 +67,7 @@ jobs:
         if: steps.gen.outputs.has_post == 'true'
         run: python main.py publish
         env:
+          IG_GRAPH_HOST: https://graph.facebook.com
           MEDIA_BRANCH: media
           IG_USER_ID: ${{ secrets.IG_USER_ID }}
           IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
