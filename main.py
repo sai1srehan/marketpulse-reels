@@ -31,7 +31,7 @@ from email.utils import parsedate_to_datetime
 
 import numpy as np
 import requests
-from PIL import Image, ImageDraw, ImageFont, features
+from PIL import Image, ImageChops, ImageDraw, ImageFont, features
 
 IST = dt.timezone(dt.timedelta(hours=5, minutes=30))
 GRAPH = (os.getenv("IG_GRAPH_HOST", "https://graph.instagram.com").rstrip("/")
@@ -301,7 +301,7 @@ def synth_music(seconds, rng):
     for f, g in ((sa / 2, 0.22), (sa * 0.75, 0.16), (sa, 0.12)):
         for h in (1, 2, 3):
             out += np.sin(2 * np.pi * f * h * t + 0.3 * np.sin(0.5 * t)) * g / h
-    bpm = rng.choice([92, 96, 100])
+    bpm = rng.choice([104, 112, 120])
     beat = 60 / bpm
     # flute melody (random walk on the scale)
     pos, deg = 0.0, rng.randint(2, 4)
@@ -322,7 +322,7 @@ def synth_music(seconds, rng):
     dha = np.sin(2 * np.pi * (60 + 90 * np.exp(-25 * kick)) * kick) * np.exp(-9 * kick)
     tin = np.sin(2 * np.pi * 420 * kick[:int(0.12 * SR)]) * np.exp(-40 * kick[:int(0.12 * SR)])
     nrng = np.random.default_rng(rng.randint(0, 10**6))
-    pattern = ["dha", None, "tin", "tin", "dha", "dha", "tin", None]
+    pattern = ["dha", "tin", "tin", "dha", "dha", "tin", "dha", "tin"]
     for k in range(int(seconds / (beat / 2))):
         hit = pattern[k % len(pattern)]
         if not hit:
@@ -381,9 +381,15 @@ _yy, _xx = np.mgrid[0:SH, 0:SW].astype(np.float32)
 _yy /= SH
 _xx /= SW
 VIG = (1 - 0.55 * ((_xx - 0.5) ** 2 + (_yy - 0.5) ** 2))[..., None]
+BRAND = os.getenv("BRAND_NAME", "MARKET PULSE")
+
+# darkening layer so captions stay readable over stock footage
+_dy = np.linspace(0, 1, H, dtype=np.float32)[:, None]
+_dm = (0.40 + 0.27 * np.sin(np.pi * _dy)) * np.ones((1, W), np.float32)
+DARK_IMG = Image.fromarray(np.repeat((_dm * 255).astype(np.uint8)[..., None], 3, axis=2))
 
 
-def background(t, pal, flash):
+def background(t, pal, flash=0.0):
     c1, c2, c3 = (np.array(c, np.float32) for c in pal)
     k = (0.7 * _yy + 0.3 * _xx + 0.06 * np.sin(t * 0.7))[..., None]
     arr = c1 * (1 - k) + c2 * k
@@ -393,9 +399,65 @@ def background(t, pal, flash):
         d2 = ((_xx - cx) * 0.5625) ** 2 + (_yy - cy) ** 2
         arr += np.exp(-d2 / 0.045)[..., None] * c3 * 0.55
     arr *= VIG
-    if flash > 0:
-        arr = arr * (1 - flash) + 255 * flash
     return Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8)).resize((W, H), Image.BICUBIC)
+
+
+def ease_out(k):
+    k = max(0.0, min(1.0, k))
+    return 1 - (1 - k) ** 3
+
+
+def glass(w, h, r=34, fill=(8, 12, 28, 165), border=(255, 255, 255, 70)):
+    img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    ImageDraw.Draw(img).rounded_rectangle((0, 0, w - 1, h - 1), r, fill=fill, outline=border, width=2)
+    return img
+
+
+def arrow(d, x, y, size, up, col):
+    pts = [(x, y + size), (x + size, y + size), (x + size / 2, y)] if up else \
+          [(x, y), (x + size, y), (x + size / 2, y + size)]
+    d.polygon(pts, fill=col)
+
+
+def stroke_text(d, xy, text, font, fill, anchor=None, sw=4):
+    d.text(xy, text, font=font, fill=fill, anchor=anchor, stroke_width=sw, stroke_fill=(0, 0, 0, 255))
+
+
+def index_card(name, last, pct, k, w=465, h=150):
+    img = glass(w, h)
+    d = ImageDraw.Draw(img)
+    col = GREEN if pct >= 0 else RED
+    d.text((26, 18), name, font=latin_font(28), fill=GREY)
+    d.text((26, 62), f"{last * k:,.0f}", font=latin_font(52), fill=WHITE)
+    txt = f"{abs(pct) * k:.2f}%"
+    pf = latin_font(30)
+    pw = int(d.textlength(txt, font=pf)) + 66
+    x0 = w - pw - 22
+    d.rounded_rectangle((x0, 22, w - 22, 70), 24, fill=col + (255,))
+    arrow(d, x0 + 18, 36, 20, pct >= 0, WHITE)
+    d.text((x0 + 46, 46), txt, font=pf, fill=WHITE, anchor="lm")
+    return img
+
+
+def brand_bar(date_label):
+    img = Image.new("RGBA", (W, 110), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    d.ellipse((60, 6, 140, 86), fill=GOLD + (255,))
+    d.text((100, 46), "MP", font=latin_font(34), fill=(20, 24, 48), anchor="mm")
+    stroke_text(d, (165, 4), BRAND, latin_font(40), WHITE, sw=3)
+    stroke_text(d, (165, 56), "తెలుగు మార్కెట్ న్యూస్", te_font(30), GOLD, sw=3)
+    stroke_text(d, (W - 60, 70), date_label, latin_font(26), WHITE, anchor="ra", sw=3)
+    return img
+
+
+def live_pill(dot):
+    img = Image.new("RGBA", (170, 54), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    d.rounded_rectangle((0, 0, 169, 53), 27, fill=(220, 38, 38, 245))
+    if dot:
+        d.ellipse((20, 16, 42, 38), fill=WHITE)
+    d.text((56, 28), "LIVE", font=latin_font(30), fill=WHITE, anchor="lm")
+    return img
 
 
 def render_chunk(words, active, fnt, max_w=900):
@@ -417,8 +479,11 @@ def render_chunk(words, active, fnt, max_w=900):
         total = sum(x[2] for x in ln) + space * (len(ln) - 1)
         x = (img.width - total) / 2
         for i, w, ww in ln:
-            d.text((x, y), w, font=fnt, fill=GOLD if i == active else WHITE,
-                   stroke_width=7, stroke_fill=(0, 0, 0, 255))
+            if i == active:  # highlighted word gets a gold pill behind it
+                d.rounded_rectangle((x - 12, y + 6, x + ww + 12, y + lh - 8), 26, fill=GOLD + (255,))
+                d.text((x, y), w, font=fnt, fill=(18, 20, 40))
+            else:
+                d.text((x, y), w, font=fnt, fill=WHITE, stroke_width=7, stroke_fill=(0, 0, 0, 255))
             x += ww + space
         y += lh
     return img
@@ -436,35 +501,126 @@ def pill(text, size, fg, bg, pad=26):
     return img
 
 
-def static_top(moves, now_label):
-    img = Image.new("RGBA", (W, 460), (0, 0, 0, 0))
+PANEL_W, PANEL_H = 960, 290
+
+
+def chart_base():
+    img = glass(PANEL_W, PANEL_H, 36)
     d = ImageDraw.Draw(img)
-    img.alpha_composite(pill("LIVE  MARKET UPDATE", 34, WHITE, (220, 38, 38, 235)), (60, 175))
-    d.text((60, 270), "మార్కెట్ న్యూస్", font=te_font(60), fill=WHITE, stroke_width=5, stroke_fill=(0, 0, 0, 255))
-    y = 365
-    for name, (last, pct) in moves.items():
-        col = GREEN if pct >= 0 else RED
-        d.text((60, y), f"{name}  {last:,.0f}", font=latin_font(38), fill=WHITE, stroke_width=4, stroke_fill=(0, 0, 0, 255))
-        d.text((W - 60, y), f"{'▲' if pct >= 0 else '▼'} {abs(pct):.2f}%", font=latin_font(38),
-               fill=col, anchor="ra", stroke_width=4, stroke_fill=(0, 0, 0, 255))
-        y += 52
+    d.text((34, 20), "NIFTY 50  -  LAST 5 DAYS", font=latin_font(26), fill=GREY)
+    for gy in (100, 150, 200):
+        d.line((34, gy, PANEL_W - 34, gy), fill=(255, 255, 255, 26), width=1)
+    d.text((PANEL_W // 2, PANEL_H - 24), "Educational only. Not investment advice.",
+           font=latin_font(22), fill=GREY, anchor="mm")
     return img
 
 
-def draw_chart(frame, series, progress):
-    x0, x1, y0, y1 = 70, W - 70, 1260, 1500
+def chart_gradient(col):
+    a = np.linspace(120, 0, PANEL_H, dtype=np.float32)[:, None] * np.ones((1, PANEL_W), np.float32)
+    arr = np.zeros((PANEL_H, PANEL_W, 4), np.uint8)
+    arr[..., 0], arr[..., 1], arr[..., 2], arr[..., 3] = col[0], col[1], col[2], a.astype(np.uint8)
+    return Image.fromarray(arr, "RGBA")
+
+
+def draw_chart(base, grad, series, progress):
+    x0, x1, y0, y1 = 40, PANEL_W - 40, 70, 232
     lo, hi = min(series), max(series)
     pts = [(x0 + (x1 - x0) * i / (len(series) - 1),
             y1 - (y1 - y0) * (v - lo) / max(hi - lo, 1e-9)) for i, v in enumerate(series)]
     n = max(2, int(len(pts) * min(1, progress) + 0.999))
     pts = pts[:n]
     col = GREEN if series[-1] >= series[0] else RED
-    glow = tuple(int(c * 0.35) for c in col)
-    d = ImageDraw.Draw(frame)
-    d.line(pts, fill=glow, width=18, joint="curve")
-    d.line(pts, fill=col, width=7, joint="curve")
+    img = base.copy()
+    mask = Image.new("L", img.size, 0)
+    ImageDraw.Draw(mask).polygon(pts + [(pts[-1][0], y1 + 14), (pts[0][0], y1 + 14)], fill=255)
+    layer = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    layer.paste(grad, (0, 0), mask)
+    img.alpha_composite(layer)
+    d = ImageDraw.Draw(img)
+    d.line(pts, fill=tuple(int(c * 0.4) for c in col) + (255,), width=14, joint="curve")
+    d.line(pts, fill=col + (255,), width=6, joint="curve")
     px, py = pts[-1]
-    d.ellipse((px - 14, py - 14, px + 14, py + 14), fill=WHITE, outline=col, width=5)
+    d.ellipse((px - 13, py - 13, px + 13, py + 13), fill=WHITE, outline=col, width=5)
+    val = series[0] + (series[-1] - series[0]) * 0  # label shows the latest plotted value
+    cur = series[min(len(series) - 1, n - 1)]
+    d.text((PANEL_W - 34, 20), f"{cur:,.0f}", font=latin_font(30), fill=WHITE, anchor="ra")
+    return img
+
+
+def swipe_band():
+    bw = 300
+    a = np.concatenate([np.linspace(0, 210, bw // 2), np.linspace(210, 0, bw // 2)]).astype(np.uint8)
+    arr = np.zeros((H, bw, 4), np.uint8)
+    arr[..., 0], arr[..., 1], arr[..., 2] = 255, 214, 102
+    arr[..., 3] = a[None, :]
+    return Image.fromarray(arr, "RGBA")
+
+
+# ------------------------------------------------------------- stock footage
+def fetch_stock_clips(n=4):
+    """Optional: free vertical stock videos from Pexels (needs PEXELS_API_KEY)."""
+    key = os.getenv("PEXELS_API_KEY")
+    if not key:
+        return []
+    queries = ["stock market trading", "city skyline night", "money finance business",
+               "candlestick chart", "india city night traffic", "business people office",
+               "gold coins", "hyderabad"]
+    random.shuffle(queries)
+    clips = []
+    for q in queries:
+        if len(clips) >= n:
+            break
+        try:
+            r = requests.get("https://api.pexels.com/videos/search",
+                             headers={"Authorization": key},
+                             params={"query": q, "orientation": "portrait", "size": "medium", "per_page": 15},
+                             timeout=30)
+            r.raise_for_status()
+            vids = [v for v in r.json().get("videos", []) if v.get("duration", 0) >= 5]
+            random.shuffle(vids)
+            for v in vids:
+                files = [f for f in v["video_files"] if f.get("file_type") == "video/mp4"
+                         and f.get("height", 0) >= 1280 and f.get("width", 0) <= 1440]
+                if not files:
+                    continue
+                files.sort(key=lambda f: abs(f["width"] - 1080))
+                path = OUT / f"stock_{len(clips)}.mp4"
+                with requests.get(files[0]["link"], stream=True, timeout=90) as resp:
+                    resp.raise_for_status()
+                    size = 0
+                    with open(path, "wb") as fh:
+                        for chunk in resp.iter_content(1 << 20):
+                            size += len(chunk)
+                            if size > 60 * 1024 * 1024:
+                                raise RuntimeError("clip too large")
+                            fh.write(chunk)
+                clips.append(path)
+                break
+        except Exception as e:
+            print(f"Pexels '{q}' failed: {e}")
+    print(f"Stock clips: {len(clips)}")
+    return clips
+
+
+class BgReader:
+    def __init__(self, path):
+        self.p = subprocess.Popen(
+            ["ffmpeg", "-loglevel", "error", "-stream_loop", "-1", "-i", str(path),
+             "-vf", f"scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},fps={FPS}",
+             "-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, bufsize=W * H * 3 * 2)
+
+    def read(self):
+        buf = self.p.stdout.read(W * H * 3)
+        if len(buf) < W * H * 3:
+            return None
+        return Image.frombuffer("RGB", (W, H), buf, "raw", "RGB", 0, 1)
+
+    def close(self):
+        try:
+            self.p.kill()
+        except Exception:
+            pass
 
 
 # ---------------------------------------------------------------- video build
@@ -488,22 +644,26 @@ def build_chunks(segments, starts, durs):
     return chunks
 
 
-def render_video(segments, starts, durs, total, audio_path, out_path, moves, series, rng):
+def render_video(segments, starts, durs, total, audio_path, out_path, moves, series, rng,
+                 clips=None, date_label=""):
+    clips = clips or []
     chunks = build_chunks(segments, starts, durs)
-    top = static_top(moves, "")
+    bar = brand_bar(date_label)
+    live = [live_pill(True), live_pill(False)]
     pals = [PALETTES[(i + rng.randint(0, 4)) % len(PALETTES)] for i in range(len(segments))]
     chips = []
     for seg in segments:
         if seg["kind"] == "news":
-            label = f"వార్త {seg['n']}  -  {seg['source']}"[:44]
-            chips.append(pill(label, 36, WHITE, (0, 0, 0, 170)))
+            chips.append(pill(f"వార్త {seg['n']}  -  {seg['source']}"[:44], 36, (18, 20, 40), GOLD + (255,)))
         else:
             chips.append(None)
-    disc = Image.new("RGBA", (W, 190), (0, 0, 0, 0))
-    dd = ImageDraw.Draw(disc)
-    dd.rounded_rectangle((60, 0, W - 60, 180), 40, fill=(0, 0, 0, 170))
-    dd.text((W // 2, 62), DISCLAIMER_TE, font=te_font(46), fill=WHITE, anchor="mm")
-    dd.text((W // 2, 128), "Educational only. Not investment advice.", font=latin_font(32), fill=GREY, anchor="mm")
+    follow = pill("ఫాలో అవ్వండి", 64, (18, 20, 40), GOLD + (255,), pad=60)
+    band = swipe_band()
+    base = chart_base() if series else None
+    grad = chart_gradient(GREEN if series[-1] >= series[0] else RED) if series else None
+    card_items = list(moves.items())
+    final_cards = [index_card(n, v[0], v[1], 1.0) for n, v in card_items]
+    bounds = [s - 0.25 for s in starts] + [total]
 
     n_frames = int(total * FPS)
     log = open(OUT / "ffmpeg.log", "w")
@@ -514,34 +674,81 @@ def render_video(segments, starts, durs, total, audio_path, out_path, moves, ser
          "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", "-ac", "2", "-shortest",
          "-movflags", "+faststart", str(out_path)],
         stdin=subprocess.PIPE, stderr=log)
-    ci = 0
+    ci, reader, reader_seg = 0, None, -1
     for fi in range(n_frames):
         t = fi / FPS
         si = max([i for i, s in enumerate(starts) if t >= s - 0.25] or [0])
-        since = t - (starts[si] - 0.25)
-        flash = max(0.0, 1 - since / 0.22) * 0.45 if si > 0 else 0.0
-        frame = background(t, pals[si], flash)
-        frame.paste(top, (0, 0), top)
+        since = t - bounds[si]
+
+        # --- background (stock footage if available, otherwise animated gradient)
+        frame = None
+        if clips:
+            if reader_seg != si:
+                if reader:
+                    reader.close()
+                reader, reader_seg = BgReader(clips[si % len(clips)]), si
+            raw = reader.read()
+            if raw is not None:
+                frame = ImageChops.multiply(raw, DARK_IMG)
+        if frame is None:
+            frame = background(t, pals[si])
+
+        # --- header: brand, live badge, segmented progress bar
+        frame.paste(bar, (0, 165), bar)
+        lp = live[0 if int(t * 2) % 2 == 0 else 1]
+        frame.paste(lp, (W - 230, 175), lp)
         d = ImageDraw.Draw(frame)
-        d.rectangle((0, 150, int(W * t / total), 158), fill=GOLD)
-        if series:
-            draw_chart(frame, series, t / total)
+        seg_w = (W - 120 - 8 * (len(segments) - 1)) / len(segments)
+        for i in range(len(segments)):
+            x0 = 60 + i * (seg_w + 8)
+            d.rounded_rectangle((x0, 142, x0 + seg_w, 150), 4, fill=(255, 255, 255, 70) if False else (110, 114, 130))
+            fill = min(1.0, max(0.0, (t - bounds[i]) / (bounds[i + 1] - bounds[i])))
+            if fill > 0:
+                d.rounded_rectangle((x0, 142, x0 + max(8, seg_w * fill), 150), 4, fill=GOLD)
+
+        # --- Nifty / Sensex cards with count-up
+        k = ease_out((t - 0.2) / 1.3)
+        for i, (name, (last, pct)) in enumerate(card_items):
+            img = final_cards[i] if k >= 1 else index_card(name, last, pct, k)
+            frame.paste(img, (60 + i * 495, 300), img)
+
+        # --- news tag (slides in at every segment start)
         if chips[si]:
-            frame.paste(chips[si], (60, 560), chips[si])
-        if segments[si]["kind"] == "outro" and t >= starts[si]:
-            frame.paste(disc, (0, 1068), disc)
+            slide = ease_out(since / 0.35)
+            frame.paste(chips[si], (int(60 - (1 - slide) * 700), 500), chips[si])
+
+        # --- live Nifty chart panel
+        if series:
+            panel = draw_chart(base, grad, series, t / total)
+            frame.paste(panel, ((W - PANEL_W) // 2, 1225), panel)
+
+        # --- word-by-word caption
         while ci < len(chunks) - 1 and t >= chunks[ci]["end"]:
             ci += 1
         ch = chunks[ci]
         if ch["starts"][0] - 0.05 <= t < ch["end"]:
             ai = max(i for i, s in enumerate(ch["starts"]) if t >= s - 0.05)
             img = ch["imgs"][ai]
-            k = min(1.0, (t - ch["starts"][ai] + 0.05) / 0.12)
-            sc = 0.86 + 0.14 * (1 - (1 - k) ** 3)
+            kk = min(1.0, (t - ch["starts"][ai] + 0.05) / 0.12)
+            sc = 0.86 + 0.14 * ease_out(kk)
             if sc < 0.999:
                 img = img.resize((int(img.width * sc), int(img.height * sc)), Image.LANCZOS)
             frame.paste(img, ((W - img.width) // 2, 880 - img.height // 2), img)
+
+        # --- outro follow button (pulsing)
+        if segments[si]["kind"] == "outro" and t >= starts[si]:
+            s = 1 + 0.05 * math.sin(t * 7)
+            fb = follow.resize((int(follow.width * s), int(follow.height * s)), Image.LANCZOS)
+            frame.paste(fb, ((W - fb.width) // 2, 1110 - fb.height // 2), fb)
+
+        # --- swipe transition between segments
+        if si > 0 and since < 0.4:
+            x = int(-300 + (W + 300) * ease_out(since / 0.4))
+            frame.paste(band, (x, 0), band)
+
         proc.stdin.write(frame.tobytes())
+    if reader:
+        reader.close()
     proc.stdin.close()
     if proc.wait() != 0:
         print(open(OUT / "ffmpeg.log").read()[-2000:])
@@ -571,7 +778,8 @@ def generate():
     audio = OUT / "audio.wav"
     mix_audio(voice, music, audio)
     render_video(segments, starts, durs, total, audio, OUT / "reel.mp4",
-                 index_moves(), nifty_series(), rng)
+                 index_moves(), nifty_series(), rng,
+                 clips=fetch_stock_clips(), date_label=now.strftime("%d %b %Y"))
 
     tags = " ".join(ANCHOR_TAGS + rng.sample(ROTATING_TAGS, 3))
     caption = "\n".join(
