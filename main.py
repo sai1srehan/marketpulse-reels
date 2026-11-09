@@ -41,12 +41,77 @@ STATE = pathlib.Path("state/posted.json")
 MUSIC_DIR = pathlib.Path("music")
 W, H, FPS, SR = 1080, 1920, 30, 44100
 NEWS_PER_VIDEO = 3
-
-NEWS_QUERIES = [
-    "స్టాక్ మార్కెట్ OR సెన్సెక్స్ OR నిఫ్టీ when:1d",
-    "షేర్ మార్కెట్ OR బ్యాంక్ నిఫ్టీ OR ఐపీఓ when:1d",
-]
+MAX_AGE_HOURS = {"default": 22, "jobs": 48, "health": 48}
+SIM_THRESHOLD = 0.34  # trigram similarity above this = "same story"
 TELUGU_RE = re.compile(r"[\u0C00-\u0C7F]")
+
+# Headlines containing these are skipped (politics, crime, tragedy): edit freely.
+BLOCKLIST = [
+    "హత్య", "అత్యాచార", "ఆత్మహత్య", "మృతి", "మరణ", "దుర్మరణ", "ప్రమాద", "అరెస్ట్", "కాల్పుల",
+    "ఎన్నిక", "ఓటర్", "వైసీపీ", "టీడీపీ", "బీఆర్ఎస్", "కాంగ్రెస్", "బీజేపీ", "జనసేన", "ముఖ్యమంత్రి",
+    "ఎమ్మెల్యే", "కులం", "మతం", "అల్లర్లు", "నేరం", "పోలీస", "జైలు", "లైంగిక", "వేధింపు", "యుద్ధ", "ఉగ్ర",
+    "murder", "rape", "suicide",
+]
+
+# One topic per video, rotated automatically so the page never feels repetitive.
+TOPICS = {
+    "money": {
+        "label": "మనీ & మార్కెట్", "emoji": "📈", "palette": 3, "disc": "invest",
+        "intro": "ఈ రోజు స్టాక్ మార్కెట్ ముఖ్యాంశాలు ఇవే.",
+        "queries": ["స్టాక్ మార్కెట్ OR సెన్సెక్స్ OR నిఫ్టీ when:1d", "బంగారం ధర OR వెండి ధర when:1d"],
+        "pexels": ["stock market trading", "candlestick chart", "gold coins"],
+        "tags": ["#stockmarkettelugu", "#sharemarket"],
+        "pool": ["#nifty50", "#sensex", "#telugufinance", "#investingtelugu", "#trending", "#telugureels"],
+    },
+    "cinema": {
+        "label": "టాలీవుడ్ అప్‌డేట్స్", "emoji": "🎬", "palette": 2, "disc": None,
+        "intro": "టాలీవుడ్ నుంచి ఈ రోజు హాట్ అప్‌డేట్స్ ఇవే.",
+        "queries": ["టాలీవుడ్ OR తెలుగు సినిమా OR ట్రైలర్ when:1d", "సినిమా రిలీజ్ OR బాక్సాఫీస్ OR ఓటీటీ when:1d"],
+        "pexels": ["movie theatre", "film camera cinema", "red carpet lights"],
+        "tags": ["#tollywood", "#telugucinema"],
+        "pool": ["#telugumovies", "#movienews", "#tollywoodupdates", "#trending", "#telugureels", "#ott"],
+    },
+    "cricket": {
+        "label": "క్రికెట్ & స్పోర్ట్స్", "emoji": "🏏", "palette": 4, "disc": None,
+        "intro": "క్రికెట్ ప్రపంచం నుంచి ఈ రోజు ముఖ్యమైన వార్తలు ఇవే.",
+        "queries": ["క్రికెట్ OR ఐపీఎల్ OR టీమిండియా when:1d", "క్రీడలు OR బ్యాడ్మింటన్ OR ఫుట్‌బాల్ when:1d"],
+        "pexels": ["cricket stadium", "cricket bat ball", "sports crowd stadium"],
+        "tags": ["#cricket", "#telugusports"],
+        "pool": ["#indiancricket", "#teamindia", "#ipl", "#cricketnews", "#trending", "#telugureels"],
+    },
+    "tech": {
+        "label": "టెక్ న్యూస్", "emoji": "📱", "palette": 1, "disc": None,
+        "intro": "టెక్ ప్రపంచంలో ఈ రోజు ఏం జరిగిందో చూద్దాం.",
+        "queries": ["టెక్నాలజీ OR స్మార్ట్‌ఫోన్ OR ఏఐ OR గూగుల్ when:1d", "గాడ్జెట్స్ OR యాప్ OR ఇంటర్నెట్ when:1d"],
+        "pexels": ["technology circuit", "smartphone hands", "artificial intelligence"],
+        "tags": ["#technews", "#telugutech"],
+        "pool": ["#ai", "#smartphones", "#gadgets", "#trending", "#telugureels", "#techtelugu"],
+    },
+    "jobs": {
+        "label": "జాబ్స్ & ఎడ్యుకేషన్", "emoji": "💼", "palette": 0, "disc": None,
+        "intro": "ఉద్యోగాలు, చదువు గురించి ఈ రోజు ముఖ్యమైన అప్‌డేట్స్ ఇవే.",
+        "queries": ["ఉద్యోగ నోటిఫికేషన్ OR జాబ్స్ OR పరీక్ష ఫలితాలు when:2d", "విద్య OR స్కాలర్‌షిప్ OR నియామకాలు when:2d"],
+        "pexels": ["students studying", "job interview office", "graduation"],
+        "tags": ["#jobsintelugu", "#telanganajobs"],
+        "pool": ["#govtjobs", "#jobalert", "#education", "#trending", "#telugureels", "#careertips"],
+    },
+    "health": {
+        "label": "ఆరోగ్యం & లైఫ్‌స్టైల్", "emoji": "🩺", "palette": 4, "disc": "health",
+        "intro": "ఆరోగ్యం గురించి ఈ రోజు తెలుసుకోవాల్సిన విషయాలు ఇవే.",
+        "queries": ["ఆరోగ్య చిట్కాలు OR ఆరోగ్యం when:2d", "డయాబెటిస్ OR ఆహారం OR యోగా when:2d"],
+        "pexels": ["healthy food", "yoga morning", "walking park"],
+        "tags": ["#healthtips", "#teluguhealth"],
+        "pool": ["#wellness", "#healthyliving", "#lifestyle", "#trending", "#telugureels", "#yoga"],
+    },
+    "viral": {
+        "label": "ట్రెండింగ్ న్యూస్", "emoji": "🔥", "palette": 2, "disc": None,
+        "intro": "సోషల్ మీడియాలో ఈ రోజు ట్రెండింగ్ విషయాలు ఇవే.",
+        "queries": ["వైరల్ OR ట్రెండింగ్ when:1d", "వైరల్ వీడియో OR సోషల్ మీడియా when:1d"],
+        "pexels": ["social media phone", "city night lights", "crowd celebration"],
+        "tags": ["#trending", "#viralreels"],
+        "pool": ["#telugu", "#telugureels", "#viral", "#explore", "#teluguupdates", "#news"],
+    },
+}
 
 WHITE, GREY, GOLD = (255, 255, 255), (190, 198, 214), (255, 214, 102)
 GREEN, RED = (34, 197, 94), (239, 68, 68)
@@ -60,13 +125,11 @@ PALETTES = [  # (dark corner, light corner, glow blobs)
 
 DISCLAIMER_EN = "Educational content only. Not investment advice. I am not a SEBI registered adviser."
 DISCLAIMER_TE = "ఇది పెట్టుబడి సలహా కాదు. కేవలం సమాచారం కోసమే."
-INTRO_TE = "ఈ రోజు స్టాక్ మార్కెట్ ముఖ్యాంశాలు ఇవే."
-OUTRO_TE = "మరిన్ని అప్‌డేట్స్ కోసం ఫాలో అవ్వండి. ఇది పెట్టుబడి సలహా కాదు."
-
-# Instagram now allows max 5 hashtags: 2 anchors + 3 rotating
-ANCHOR_TAGS = ["#stockmarkettelugu", "#sharemarket"]
-ROTATING_TAGS = ["#nifty50", "#sensex", "#telugunews", "#telugufinance",
-                 "#investingtelugu", "#hyderabad", "#telugureels", "#telangana"]
+HEALTH_TE = "ఇది వైద్య సలహా కాదు. ఆరోగ్య సమస్యలకు డాక్టర్‌ను సంప్రదించండి."
+HEALTH_EN = "General information only. Not medical advice. Consult a doctor."
+GENERIC_TE = "వార్తలు పబ్లిక్ సోర్స్‌ల నుంచి సంగ్రహించబడ్డాయి."
+GENERIC_EN = "News summarised from public sources."
+OUTRO_TE = "మరిన్ని అప్‌డేట్స్ కోసం ఫాలో అవ్వండి."
 
 
 # ------------------------------------------------------------------ helpers
@@ -84,16 +147,42 @@ def run(cmd):
         raise RuntimeError(f"Command failed: {' '.join(cmd[:3])} ...")
 
 
-def load_posted():
+def load_state():
     try:
-        return json.loads(STATE.read_text())["posted"]
+        st = json.loads(STATE.read_text())
     except Exception:
-        return []
+        st = {}
+    st.setdefault("posted", [])
+    st.setdefault("items", [])
+    st.setdefault("topics", [])
+    return st
 
 
-def save_posted(keys):
+def save_state(meta):
+    st = load_state()
+    ts = dt.datetime.now(dt.timezone.utc).isoformat()
+    st["posted"] = (st["posted"] + meta["keys"])[-600:]
+    st["items"] = (st["items"] + [{"t": t, "ts": ts, "topic": meta["topic"]} for t in meta["titles"]])[-300:]
+    st["topics"] = (st["topics"] + [meta["topic"]])[-30:]
     STATE.parent.mkdir(exist_ok=True)
-    STATE.write_text(json.dumps({"posted": (load_posted() + keys)[-400:]}, indent=1))
+    STATE.write_text(json.dumps(st, ensure_ascii=False, indent=1))
+
+
+def norm_title(t):
+    return re.sub(r"[^a-z0-9\u0C00-\u0C7F]+", " ", t.lower()).strip()
+
+
+def trigrams(t):
+    x = norm_title(t).replace(" ", "_")
+    return {x[i:i + 3] for i in range(len(x) - 2)}
+
+
+def jaccard(a, b):
+    return len(a & b) / max(1, len(a | b))
+
+
+def is_repeat(tri, others):
+    return any(jaccard(tri, o) >= SIM_THRESHOLD for o in others)
 
 
 # --------------------------------------------------------------------- fonts
@@ -146,9 +235,12 @@ def mixed_font(text, size):
 
 
 # --------------------------------------------------------------------- news
-def fetch_news():
+def fetch_news(topic_key):
+    topic = TOPICS[topic_key]
+    max_age = dt.timedelta(hours=MAX_AGE_HOURS.get(topic_key, MAX_AGE_HOURS["default"]))
+    now_utc = dt.datetime.now(dt.timezone.utc)
     items, seen = [], set()
-    for q in NEWS_QUERIES:
+    for q in topic["queries"]:
         try:
             r = requests.get("https://news.google.com/rss/search",
                              params={"q": q, "hl": "te", "gl": "IN", "ceid": "IN:te"},
@@ -156,7 +248,7 @@ def fetch_news():
             r.raise_for_status()
             root = ET.fromstring(r.content)
         except Exception as e:
-            print(f"Feed failed: {e}")
+            print(f"Feed failed ({topic_key}): {e}")
             continue
         for it in root.iter("item"):
             title = (it.findtext("title") or "").strip()
@@ -166,20 +258,68 @@ def fetch_news():
             elif " - " in title and not source:
                 title, source = title.rsplit(" - ", 1)
             title = re.split(r"\s*[|｜]\s*", title)[0].strip()
-            if not TELUGU_RE.search(title) or len(title) < 15:
+            if not TELUGU_RE.search(title) or not (15 <= len(title) <= 190):
                 continue
-            norm = re.sub(r"\W+", " ", title.lower()).strip()
-            key = hashlib.md5(norm.encode()).hexdigest()[:16]
+            if any(b in title.lower() for b in BLOCKLIST):
+                continue
+            try:
+                pub = parsedate_to_datetime(it.findtext("pubDate"))
+                if pub.tzinfo is None:
+                    pub = pub.replace(tzinfo=dt.timezone.utc)
+            except Exception:
+                continue
+            if now_utc - pub > max_age:
+                continue
+            key = hashlib.md5(norm_title(title).encode()).hexdigest()[:16]
             if key in seen:
                 continue
             seen.add(key)
-            try:
-                pub = parsedate_to_datetime(it.findtext("pubDate"))
-            except Exception:
-                pub = dt.datetime.now(dt.timezone.utc)
             items.append({"title": title, "source": source or "News", "key": key, "pub": pub})
     items.sort(key=lambda n: n["pub"], reverse=True)
     return items
+
+
+def fresh_stories(topic_key, state, extra_lines=()):
+    """Newest stories that are neither posted before nor a re-wording of a recent post."""
+    cutoff = dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=96)
+    recent = []
+    for i in state["items"]:
+        try:
+            if dt.datetime.fromisoformat(i["ts"]) >= cutoff:
+                recent.append(trigrams(i["t"]))
+        except Exception:
+            recent.append(trigrams(i["t"]))
+    recent += [trigrams(x) for x in extra_lines]
+    posted, picked, picked_tri = set(state["posted"]), [], []
+    for n in fetch_news(topic_key):
+        if n["key"] in posted:
+            continue
+        tri = trigrams(n["title"])
+        if is_repeat(tri, recent) or is_repeat(tri, picked_tri):
+            continue
+        picked.append(n)
+        picked_tri.append(tri)
+        if len(picked) >= NEWS_PER_VIDEO:
+            break
+    return picked
+
+
+def recent_ig_lines(user_id, token):
+    """Story lines from our own recent Instagram captions (protects against lost state)."""
+    try:
+        r = requests.get(f"{GRAPH}/{user_id}/media",
+                         params={"fields": "caption", "limit": 25, "access_token": token}, timeout=30)
+        r.raise_for_status()
+        out = []
+        for m in r.json().get("data", []):
+            for ln in (m.get("caption") or "").splitlines():
+                mm = re.match(r"^\d\.\s+(.+?)(?:\s+\([^()]*\))?$", ln.strip())
+                if mm:
+                    out.append(mm.group(1))
+        return out
+    except Exception as e:
+        print(f"Recent-post check skipped: {e}")
+        return []
 
 
 def trim_words(text, n=20):
@@ -194,9 +334,10 @@ def rewrite_te(news):
     if not key:
         return fallback
     prompt = (
-        "Rewrite each Telugu stock-market headline below as ONE short, natural "
-        "spoken Telugu sentence (max 16 words) for a voiceover. Use only facts "
-        "in the headline. No advice, no predictions, no opinions. Return ONLY a "
+        "Rewrite each Telugu news headline below as ONE short sentence in warm, "
+        "conversational spoken Telugu, as a friendly Instagram news presenter would "
+        "say it (simple everyday words, max 16 words, no formal bookish phrases). Use "
+        "only facts in the headline. No advice, no predictions, no opinions. Return ONLY a "
         "JSON array of Telugu strings in the same order.\n" + json.dumps(fallback, ensure_ascii=False)
     )
     try:
@@ -244,11 +385,37 @@ def nifty_series():
 
 
 # ----------------------------------------------------------------- voiceover
+VOICE_FX = ("highpass=f=90,acompressor=threshold=0.12:ratio=3:attack=5:release=90,"
+            "equalizer=f=3200:t=q:w=1.2:g=2.5,aecho=0.85:0.9:55:0.14")
+
+
+def eleven_tts(text, path):
+    """Most natural option. Needs ELEVENLABS_API_KEY + ELEVENLABS_VOICE_ID (Telugu needs model eleven_v3)."""
+    r = requests.post(
+        f"https://api.elevenlabs.io/v1/text-to-speech/{os.environ['ELEVENLABS_VOICE_ID']}",
+        headers={"xi-api-key": os.environ["ELEVENLABS_API_KEY"], "Content-Type": "application/json",
+                 "Accept": "audio/mpeg"},
+        params={"output_format": "mp3_44100_128"},
+        json={"text": text, "model_id": os.getenv("ELEVENLABS_MODEL", "eleven_v3"),
+              "voice_settings": {"stability": 0.5}},
+        timeout=120)
+    r.raise_for_status()
+    path.write_bytes(r.content)
+
+
 def tts(text, path):
+    if os.getenv("ELEVENLABS_API_KEY") and os.getenv("ELEVENLABS_VOICE_ID"):
+        try:
+            eleven_tts(text, path)
+            if path.stat().st_size > 1000:
+                return
+        except Exception as e:
+            print(f"ElevenLabs failed ({e}); falling back to Edge TTS")
     voice = os.getenv("TTS_VOICE", "te-IN-ShrutiNeural")
     try:
         import edge_tts
-        asyncio.run(edge_tts.Communicate(text, voice, rate="+4%").save(str(path)))
+        rate = f"+{random.choice([3, 5, 7, 9])}%"  # slight variation so it is less monotone
+        asyncio.run(edge_tts.Communicate(text, voice, rate=rate).save(str(path)))
         if path.exists() and path.stat().st_size > 1000:
             return
     except Exception as e:
@@ -273,8 +440,10 @@ def make_voice(segments):
     for i, seg in enumerate(segments):
         mp3, wav = OUT / f"seg_{i}.mp3", OUT / f"seg_{i}.wav"
         tts(seg["text"], mp3)
-        run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(mp3), "-ar", str(SR),
-             "-ac", "1", "-c:a", "pcm_s16le", str(wav)])
+        cmd = ["ffmpeg", "-y", "-loglevel", "error", "-i", str(mp3), "-ar", str(SR), "-ac", "1"]
+        if os.getenv("VOICE_FX", "1") == "1":  # light compression/EQ/room so it sounds produced
+            cmd += ["-af", VOICE_FX]
+        run(cmd + ["-c:a", "pcm_s16le", str(wav)])
         data = load_wav_trim(wav)
         clips.append(data)
         starts.append(t)
@@ -439,13 +608,13 @@ def index_card(name, last, pct, k, w=465, h=150):
     return img
 
 
-def brand_bar(date_label):
+def brand_bar(date_label, label):
     img = Image.new("RGBA", (W, 110), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
     d.ellipse((60, 6, 140, 86), fill=GOLD + (255,))
     d.text((100, 46), "MP", font=latin_font(34), fill=(20, 24, 48), anchor="mm")
     stroke_text(d, (165, 4), BRAND, latin_font(40), WHITE, sw=3)
-    stroke_text(d, (165, 56), "తెలుగు మార్కెట్ న్యూస్", te_font(30), GOLD, sw=3)
+    stroke_text(d, (165, 56), label, te_font(30), GOLD, sw=3)
     stroke_text(d, (W - 60, 70), date_label, latin_font(26), WHITE, anchor="ra", sw=3)
     return img
 
@@ -460,18 +629,65 @@ def live_pill(dot):
     return img
 
 
+LATIN_RE = re.compile(r"[A-Za-z]")
+NEUTRAL = set(" .,:;-–—!?()'\"/&%+#@|•")
+
+
+def text_runs(text):
+    """Split into (chunk, is_latin) runs so each script uses a font that has its glyphs."""
+    out, cur, cur_latin = [], "", None
+    for ch in text:
+        if ch in NEUTRAL or ch.isdigit():
+            cur += ch
+            continue
+        is_l = bool(LATIN_RE.match(ch))
+        if cur_latin is None:
+            cur_latin = is_l
+        if is_l != cur_latin:
+            out.append((cur, cur_latin))
+            cur, cur_latin = "", is_l
+        cur += ch
+    if cur:
+        out.append((cur, bool(cur_latin)))
+    return out
+
+
+def run_font(is_latin, size):
+    return latin_font(size) if is_latin else te_font(size)
+
+
+def mixed_width(d, text, size):
+    return sum(d.textlength(r, font=run_font(l, size)) for r, l in text_runs(text))
+
+
+def draw_mixed(d, xy, text, size, fill, anchor="lt", sw=0, stroke_fill=(0, 0, 0, 255)):
+    x, y = xy
+    total = mixed_width(d, text, size)
+    if anchor[0] == "m":
+        x -= total / 2
+    elif anchor[0] == "r":
+        x -= total
+    asc, desc = te_font(size).getmetrics()
+    base = y + (asc - desc) / 2 if anchor[1] == "m" else y + asc
+    for r, l in text_runs(text):
+        f = run_font(l, size)
+        d.text((x, base), r, font=f, fill=fill, anchor="ls", stroke_width=sw, stroke_fill=stroke_fill)
+        x += d.textlength(r, font=f)
+
+
 def render_chunk(words, active, fnt, max_w=900):
+    size = fnt.size
     tmp = ImageDraw.Draw(Image.new("RGBA", (10, 10)))
     space = tmp.textlength(" ", font=fnt)
     lines, cur = [[]], 0
     for i, w in enumerate(words):
-        ww = tmp.textlength(w, font=fnt)
+        ww = mixed_width(tmp, w, size)
         if lines[-1] and cur + space + ww > max_w:
             lines.append([])
             cur = 0
         cur += (space if lines[-1] else 0) + ww
         lines[-1].append((i, w, ww))
-    lh = int(fnt.size * 1.5)
+    lh = int(size * 1.5)
     img = Image.new("RGBA", (max_w + 80, lh * len(lines) + 40), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
     y = 14
@@ -481,23 +697,22 @@ def render_chunk(words, active, fnt, max_w=900):
         for i, w, ww in ln:
             if i == active:  # highlighted word gets a gold pill behind it
                 d.rounded_rectangle((x - 12, y + 6, x + ww + 12, y + lh - 8), 26, fill=GOLD + (255,))
-                d.text((x, y), w, font=fnt, fill=(18, 20, 40))
+                draw_mixed(d, (x, y), w, size, (18, 20, 40))
             else:
-                d.text((x, y), w, font=fnt, fill=WHITE, stroke_width=7, stroke_fill=(0, 0, 0, 255))
+                draw_mixed(d, (x, y), w, size, WHITE, sw=7)
             x += ww + space
         y += lh
     return img
 
 
 def pill(text, size, fg, bg, pad=26):
-    f = mixed_font(text, size)
     tmp = ImageDraw.Draw(Image.new("RGBA", (10, 10)))
-    w = int(tmp.textlength(text, font=f)) + pad * 2
+    w = int(mixed_width(tmp, text, size)) + pad * 2
     h = int(size * 1.7)
     img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
     d.rounded_rectangle((0, 0, w - 1, h - 1), h // 2, fill=bg)
-    d.text((pad, h // 2), text, font=f, fill=fg, anchor="lm")
+    draw_mixed(d, (pad, h // 2), text, size, fg, anchor="lm")
     return img
 
 
@@ -557,14 +772,12 @@ def swipe_band():
 
 
 # ------------------------------------------------------------- stock footage
-def fetch_stock_clips(n=4):
+def fetch_stock_clips(topic_key, n=4):
     """Optional: free vertical stock videos from Pexels (needs PEXELS_API_KEY)."""
     key = os.getenv("PEXELS_API_KEY")
     if not key:
         return []
-    queries = ["stock market trading", "city skyline night", "money finance business",
-               "candlestick chart", "india city night traffic", "business people office",
-               "gold coins", "hyderabad"]
+    queries = TOPICS[topic_key]["pexels"] + ["india city night traffic", "city skyline night"]
     random.shuffle(queries)
     clips = []
     for q in queries:
@@ -644,13 +857,38 @@ def build_chunks(segments, starts, durs):
     return chunks
 
 
+def topic_card(text, n):
+    img = glass(960, 150)
+    d = ImageDraw.Draw(img)
+    d.text((40, 75), text, font=te_font(54), fill=WHITE, anchor="lm")
+    d.rounded_rectangle((960 - 40 - 150, 45, 960 - 40, 105), 30, fill=GOLD + (255,))
+    d.text((960 - 40 - 75, 75), f"TOP {n}", font=latin_font(32), fill=(18, 20, 40), anchor="mm")
+    return img
+
+
+def info_panel(n_news, cur):
+    img = glass(PANEL_W, 230, 36)
+    d = ImageDraw.Draw(img)
+    d.text((PANEL_W // 2, 56), "ప్రతిరోజూ కొత్త తెలుగు అప్‌డేట్స్", font=te_font(38), fill=WHITE, anchor="mm")
+    gap = 130
+    x0 = PANEL_W // 2 - gap * (n_news - 1) // 2
+    for i in range(n_news):
+        cx, on = x0 + i * gap, (i + 1 == cur)
+        d.ellipse((cx - 32, 110, cx + 32, 174), fill=GOLD + (255,) if on else (255, 255, 255, 40),
+                  outline=(255, 255, 255, 100), width=2)
+        d.text((cx, 142), str(i + 1), font=latin_font(34), fill=(18, 20, 40) if on else GREY, anchor="mm")
+    return img
+
+
 def render_video(segments, starts, durs, total, audio_path, out_path, moves, series, rng,
-                 clips=None, date_label=""):
+                 clips=None, date_label="", topic=None):
+    topic = topic or TOPICS["money"]
     clips = clips or []
+    n_news = sum(1 for sg in segments if sg["kind"] == "news")
     chunks = build_chunks(segments, starts, durs)
-    bar = brand_bar(date_label)
+    bar = brand_bar(date_label, topic["label"])
     live = [live_pill(True), live_pill(False)]
-    pals = [PALETTES[(i + rng.randint(0, 4)) % len(PALETTES)] for i in range(len(segments))]
+    pals = [PALETTES[(topic["palette"] + i) % len(PALETTES)] for i in range(len(segments))]
     chips = []
     for seg in segments:
         if seg["kind"] == "news":
@@ -663,7 +901,10 @@ def render_video(segments, starts, durs, total, audio_path, out_path, moves, ser
     grad = chart_gradient(GREEN if series[-1] >= series[0] else RED) if series else None
     card_items = list(moves.items())
     final_cards = [index_card(n, v[0], v[1], 1.0) for n, v in card_items]
-    bounds = [s - 0.25 for s in starts] + [total]
+    if not card_items:  # non-market topics: topic card + numbered panel instead of cards/chart
+        tcard = topic_card(f"ఈ రోజు టాప్ {n_news} అప్‌డేట్స్", n_news)
+        panels = [info_panel(n_news, sg.get("n", 0) if sg["kind"] == "news" else 0) for sg in segments]
+    bounds = [x - 0.25 for x in starts] + [total]
 
     n_frames = int(total * FPS)
     log = open(OUT / "ffmpeg.log", "w")
@@ -677,10 +918,9 @@ def render_video(segments, starts, durs, total, audio_path, out_path, moves, ser
     ci, reader, reader_seg = 0, None, -1
     for fi in range(n_frames):
         t = fi / FPS
-        si = max([i for i, s in enumerate(starts) if t >= s - 0.25] or [0])
+        si = max([i for i, x in enumerate(starts) if t >= x - 0.25] or [0])
         since = t - bounds[si]
 
-        # --- background (stock footage if available, otherwise animated gradient)
         frame = None
         if clips:
             if reader_seg != si:
@@ -693,7 +933,6 @@ def render_video(segments, starts, durs, total, audio_path, out_path, moves, ser
         if frame is None:
             frame = background(t, pals[si])
 
-        # --- header: brand, live badge, segmented progress bar
         frame.paste(bar, (0, 165), bar)
         lp = live[0 if int(t * 2) % 2 == 0 else 1]
         frame.paste(lp, (W - 230, 175), lp)
@@ -701,33 +940,34 @@ def render_video(segments, starts, durs, total, audio_path, out_path, moves, ser
         seg_w = (W - 120 - 8 * (len(segments) - 1)) / len(segments)
         for i in range(len(segments)):
             x0 = 60 + i * (seg_w + 8)
-            d.rounded_rectangle((x0, 142, x0 + seg_w, 150), 4, fill=(255, 255, 255, 70) if False else (110, 114, 130))
+            d.rounded_rectangle((x0, 142, x0 + seg_w, 150), 4, fill=(110, 114, 130))
             fill = min(1.0, max(0.0, (t - bounds[i]) / (bounds[i + 1] - bounds[i])))
             if fill > 0:
                 d.rounded_rectangle((x0, 142, x0 + max(8, seg_w * fill), 150), 4, fill=GOLD)
 
-        # --- Nifty / Sensex cards with count-up
-        k = ease_out((t - 0.2) / 1.3)
-        for i, (name, (last, pct)) in enumerate(card_items):
-            img = final_cards[i] if k >= 1 else index_card(name, last, pct, k)
-            frame.paste(img, (60 + i * 495, 300), img)
+        if card_items:
+            k = ease_out((t - 0.2) / 1.3)
+            for i, (name, (last, pct)) in enumerate(card_items):
+                img = final_cards[i] if k >= 1 else index_card(name, last, pct, k)
+                frame.paste(img, (60 + i * 495, 300), img)
+        else:
+            frame.paste(tcard, (60, 300), tcard)
 
-        # --- news tag (slides in at every segment start)
         if chips[si]:
             slide = ease_out(since / 0.35)
             frame.paste(chips[si], (int(60 - (1 - slide) * 700), 500), chips[si])
 
-        # --- live Nifty chart panel
         if series:
             panel = draw_chart(base, grad, series, t / total)
             frame.paste(panel, ((W - PANEL_W) // 2, 1225), panel)
+        elif not card_items:
+            frame.paste(panels[si], ((W - PANEL_W) // 2, 1260), panels[si])
 
-        # --- word-by-word caption
         while ci < len(chunks) - 1 and t >= chunks[ci]["end"]:
             ci += 1
         ch = chunks[ci]
         if ch["starts"][0] - 0.05 <= t < ch["end"]:
-            ai = max(i for i, s in enumerate(ch["starts"]) if t >= s - 0.05)
+            ai = max(i for i, x in enumerate(ch["starts"]) if t >= x - 0.05)
             img = ch["imgs"][ai]
             kk = min(1.0, (t - ch["starts"][ai] + 0.05) / 0.12)
             sc = 0.86 + 0.14 * ease_out(kk)
@@ -735,13 +975,11 @@ def render_video(segments, starts, durs, total, audio_path, out_path, moves, ser
                 img = img.resize((int(img.width * sc), int(img.height * sc)), Image.LANCZOS)
             frame.paste(img, ((W - img.width) // 2, 880 - img.height // 2), img)
 
-        # --- outro follow button (pulsing)
         if segments[si]["kind"] == "outro" and t >= starts[si]:
-            s = 1 + 0.05 * math.sin(t * 7)
-            fb = follow.resize((int(follow.width * s), int(follow.height * s)), Image.LANCZOS)
+            sc2 = 1 + 0.05 * math.sin(t * 7)
+            fb = follow.resize((int(follow.width * sc2), int(follow.height * sc2)), Image.LANCZOS)
             frame.paste(fb, ((W - fb.width) // 2, 1110 - fb.height // 2), fb)
 
-        # --- swipe transition between segments
         if si > 0 and since < 0.4:
             x = int(-300 + (W + 300) * ease_out(since / 0.4))
             frame.paste(band, (x, 0), band)
@@ -756,40 +994,70 @@ def render_video(segments, starts, durs, total, audio_path, out_path, moves, ser
 
 
 # ------------------------------------------------------------------ commands
+def pick_topic(state, ig_lines):
+    forced = os.getenv("TOPIC")
+    if forced in TOPICS:
+        order = [forced]
+    else:  # least-recently-used topics first, random tie-break
+        recent = state["topics"][-8:]
+        order = sorted(TOPICS, key=lambda k: (recent.count(k), random.random()))
+    for tk in order:
+        fresh = fresh_stories(tk, state, ig_lines)
+        print(f"Topic {tk}: {len(fresh)} fresh stories")
+        if len(fresh) >= 2:
+            return tk, fresh
+    return None, []
+
+
 def generate():
     OUT.mkdir(exist_ok=True)
-    posted = set(load_posted())
-    fresh = [n for n in fetch_news() if n["key"] not in posted][:NEWS_PER_VIDEO]
-    if len(fresh) < 2:
-        print("Fewer than 2 new Telugu headlines. Skipping this run.")
+    state = load_state()
+    ig_lines = []
+    if os.getenv("IG_ACCESS_TOKEN"):
+        ig_lines = recent_ig_lines(os.getenv("IG_USER_ID") or "me", os.environ["IG_ACCESS_TOKEN"])
+    topic_key, fresh = pick_topic(state, ig_lines)
+    if not topic_key:
+        print("No topic has 2+ fresh, non-repeated stories right now. Skipping this run.")
         set_output("has_post", "false")
         return
+    topic = TOPICS[topic_key]
+    print(f"Chosen topic: {topic_key}")
     lines = rewrite_te(fresh)
     now = dt.datetime.now(IST)
     rng = random.Random(int(now.timestamp()))
 
-    segments = [{"kind": "intro", "text": INTRO_TE}]
+    outro = OUTRO_TE + (" " + DISCLAIMER_TE if topic["disc"] == "invest" else
+                        " " + "ఇది వైద్య సలహా కాదు." if topic["disc"] == "health" else "")
+    segments = [{"kind": "intro", "text": topic["intro"]}]
     for i, (ln, n) in enumerate(zip(lines, fresh), 1):
         segments.append({"kind": "news", "text": ln, "source": n["source"], "n": i})
-    segments.append({"kind": "outro", "text": OUTRO_TE})
+    segments.append({"kind": "outro", "text": outro})
 
     voice, starts, durs, total = make_voice(segments)
     music = get_music(total, rng)
     audio = OUT / "audio.wav"
     mix_audio(voice, music, audio)
+    money = topic_key == "money"
     render_video(segments, starts, durs, total, audio, OUT / "reel.mp4",
-                 index_moves(), nifty_series(), rng,
-                 clips=fetch_stock_clips(), date_label=now.strftime("%d %b %Y"))
+                 index_moves() if money else {}, nifty_series() if money else None, rng,
+                 clips=fetch_stock_clips(topic_key), date_label=now.strftime("%d %b %Y"), topic=topic)
 
-    tags = " ".join(ANCHOR_TAGS + rng.sample(ROTATING_TAGS, 3))
+    if topic["disc"] == "invest":
+        disc = [DISCLAIMER_TE, DISCLAIMER_EN]
+    elif topic["disc"] == "health":
+        disc = [HEALTH_TE, HEALTH_EN]
+    else:
+        disc = [GENERIC_TE, GENERIC_EN]
+    tags = " ".join(topic["tags"] + rng.sample(topic["pool"], 3))
     caption = "\n".join(
-        [f"📈 స్టాక్ మార్కెట్ అప్‌డేట్ | {now.strftime('%d %b %Y')}", ""]
+        [f"{topic['emoji']} {topic['label']} | {now.strftime('%d %b %Y')}", ""]
         + [f"{i}. {ln} ({n['source']})" for i, (ln, n) in enumerate(zip(lines, fresh), 1)]
-        + ["", DISCLAIMER_TE, DISCLAIMER_EN, "", tags]
+        + [""] + disc + ["", tags]
     )[:2200]
     name = f"reel-{now.strftime('%Y%m%d-%H%M')}.mp4"
     (OUT / "meta.json").write_text(json.dumps(
-        {"caption": caption, "video_name": name, "keys": [n["key"] for n in fresh]},
+        {"caption": caption, "video_name": name, "keys": [n["key"] for n in fresh],
+         "titles": [n["title"] for n in fresh], "lines": lines, "topic": topic_key},
         ensure_ascii=False))
     print(f"Built out/reel.mp4 ({os.path.getsize(OUT / 'reel.mp4') / 1e6:.1f} MB, {total:.0f}s)")
     set_output("has_post", "true")
@@ -822,6 +1090,17 @@ def publish():
         return
     user_id = os.getenv("IG_USER_ID") or "me"
     token = os.environ["IG_ACCESS_TOKEN"]
+
+    # last safety net: never post a story set we already posted on Instagram
+    ig_lines = recent_ig_lines(user_id, token)
+    if ig_lines:
+        tris = [trigrams(x) for x in ig_lines]
+        dup = sum(1 for ln in meta["lines"] if is_repeat(trigrams(ln), tris))
+        if dup >= 2:
+            print("These stories look like a repeat of recent posts. Skipping publish.")
+            save_state(meta)
+            return
+
     repo = os.environ["GITHUB_REPOSITORY"]
     branch = os.getenv("MEDIA_BRANCH", "media")
     url = f"https://raw.githubusercontent.com/{repo}/{branch}/{meta['video_name']}"
@@ -843,7 +1122,7 @@ def publish():
         raise RuntimeError("Timed out waiting for Instagram to process the video.")
     res = api("POST", f"{user_id}/media_publish", creation_id=container, access_token=token)
     print(f"Published Reel! Media ID: {res['id']}")
-    save_posted(meta["keys"])
+    save_state(meta)
 
 
 if __name__ == "__main__":
