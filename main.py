@@ -56,6 +56,8 @@ OUT = pathlib.Path("out")
 STATE = pathlib.Path("state/posted.json")
 MUSIC_DIR = pathlib.Path("music")
 CLIPS_DIR = pathlib.Path("clips")
+SHOW_PROGRESS = os.getenv("SHOW_PROGRESS", "0") == "1"      # the thin line segments at the top
+SHOW_SUBTITLES = os.getenv("SHOW_SUBTITLES", "0") == "1"    # caption card with highlighted words
 W, H, FPS, SR = 1080, 1920, 30, 44100
 GY = 1190                      # ground line for characters
 SLOT = {0: 290, 1: 780}        # x of left / right character
@@ -1354,29 +1356,31 @@ def render_video(story, segments, starts, durs, envs, total, audio_path, out_pat
         d = ImageDraw.Draw(frame)
 
         # --- UI
-        seg_w = (W - 120 - 8 * (len(segments) - 1)) / len(segments)
-        for i in range(len(segments)):
-            x0 = 60 + i * (seg_w + 8)
-            d.rounded_rectangle((x0, 142, x0 + seg_w, 150), 4, fill=(120, 110, 160))
-            fill = min(1.0, max(0.0, (t - bounds[i]) / (bounds[i + 1] - bounds[i])))
-            if fill > 0:
-                d.rounded_rectangle((x0, 142, x0 + max(8, seg_w * fill), 150), 4, fill=WHITE)
+        if SHOW_PROGRESS:
+            seg_w = (W - 120 - 8 * (len(segments) - 1)) / len(segments)
+            for i in range(len(segments)):
+                x0 = 60 + i * (seg_w + 8)
+                d.rounded_rectangle((x0, 142, x0 + seg_w, 150), 4, fill=(120, 110, 160))
+                fill = min(1.0, max(0.0, (t - bounds[i]) / (bounds[i + 1] - bounds[i])))
+                if fill > 0:
+                    d.rounded_rectangle((x0, 142, x0 + max(8, seg_w * fill), 150), 4, fill=WHITE)
         frame.paste(chip, (60, 172), chip)
         frame.paste(ribbon_img, (60, 262), ribbon_img)
         if seg["kind"] == "intro":
             sc = max(0.05, ease_back(since / 0.5))
             tb = title_big.resize((int(820 * sc), int(196 * sc)), Image.BILINEAR)
             frame.paste(tb, (int(540 - tb.width / 2), int(820 - tb.height / 2)), tb)
-        frame.paste(card, (60, 1300), card)
-        nc = name_chips[id(seg)]
-        frame.paste(nc, (90, 1300 - nc.height // 2), nc)
-        while ci < len(chunks) - 1 and t >= chunks[ci]["end"]:
-            ci += 1
-        ch_ = chunks[ci]
-        if ch_["starts"][0] - 0.05 <= t < ch_["end"]:
-            ai = max(i for i, x in enumerate(ch_["starts"]) if t >= x - 0.05)
-            img = ch_["imgs"][ai]
-            frame.paste(img, ((W - img.width) // 2, 1300 + (290 - img.height) // 2 + 10), img)
+        if SHOW_SUBTITLES:
+            frame.paste(card, (60, 1300), card)
+            nc = name_chips[id(seg)]
+            frame.paste(nc, (90, 1300 - nc.height // 2), nc)
+            while ci < len(chunks) - 1 and t >= chunks[ci]["end"]:
+                ci += 1
+            ch_ = chunks[ci]
+            if ch_["starts"][0] - 0.05 <= t < ch_["end"]:
+                ai = max(i for i, x in enumerate(ch_["starts"]) if t >= x - 0.05)
+                img = ch_["imgs"][ai]
+                frame.paste(img, ((W - img.width) // 2, 1300 + (290 - img.height) // 2 + 10), img)
         if seg["kind"] == "moral":
             confetti(d, since, 77, sparkle)
         proc.stdin.write(frame.tobytes())
@@ -1496,23 +1500,25 @@ def render_clip_video(story, segments, starts, durs, total, audio_path, out_path
         frame = frame.copy()
         frame.paste(vign, (0, 0), vign)
         d = ImageDraw.Draw(frame)
-        seg_w = (W - 120 - 8 * (len(segments) - 1)) / len(segments)
-        for i in range(len(segments)):
-            x0 = 60 + i * (seg_w + 8)
-            d.rounded_rectangle((x0, 142, x0 + seg_w, 150), 4, fill=(255, 255, 255, 60) if False else (150, 150, 160))
-            f = min(1.0, max(0.0, (t - bounds[i]) / (bounds[i + 1] - bounds[i])))
-            if f > 0:
-                d.rounded_rectangle((x0, 142, x0 + max(8, seg_w * f), 150), 4, fill=WHITE)
-        frame.paste(card, (60, 250), card)
-        nc = chips[id(seg)]
-        frame.paste(nc, (90, 250 - nc.height // 2), nc)
-        while ci < len(chunks) - 1 and t >= chunks[ci]["end"]:
-            ci += 1
-        c = chunks[ci]
-        if c["starts"][0] - 0.05 <= t < c["end"]:
-            ai = max(i for i, x in enumerate(c["starts"]) if t >= x - 0.05)
-            im = c["imgs"][ai]
-            frame.paste(im, ((W - im.width) // 2, 250 + (300 - im.height) // 2 + 8), im)
+        if SHOW_PROGRESS:
+            seg_w = (W - 120 - 8 * (len(segments) - 1)) / len(segments)
+            for i in range(len(segments)):
+                x0 = 60 + i * (seg_w + 8)
+                d.rounded_rectangle((x0, 142, x0 + seg_w, 150), 4, fill=(150, 150, 160))
+                f = min(1.0, max(0.0, (t - bounds[i]) / (bounds[i + 1] - bounds[i])))
+                if f > 0:
+                    d.rounded_rectangle((x0, 142, x0 + max(8, seg_w * f), 150), 4, fill=WHITE)
+        if SHOW_SUBTITLES:
+            frame.paste(card, (60, 250), card)
+            nc = chips[id(seg)]
+            frame.paste(nc, (90, 250 - nc.height // 2), nc)
+            while ci < len(chunks) - 1 and t >= chunks[ci]["end"]:
+                ci += 1
+            c = chunks[ci]
+            if c["starts"][0] - 0.05 <= t < c["end"]:
+                ai = max(i for i, x in enumerate(c["starts"]) if t >= x - 0.05)
+                im = c["imgs"][ai]
+                frame.paste(im, ((W - im.width) // 2, 250 + (300 - im.height) // 2 + 8), im)
         proc.stdin.write(frame.tobytes())
     if reader:
         reader.close()
