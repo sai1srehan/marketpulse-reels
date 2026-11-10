@@ -42,7 +42,7 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           AI_STORIES: ${{ vars.AI_STORIES }}
-          REQUIRE_CLIPS: ${{ vars.REQUIRE_CLIPS || '1' }}
+          REQUIRE_CLIPS: ${{ vars.REQUIRE_CLIPS || '0' }}
           ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
           ELEVENLABS_VOICE_MALE: ${{ secrets.ELEVENLABS_VOICE_MALE }}
           ELEVENLABS_VOICE_FEMALE: ${{ secrets.ELEVENLABS_VOICE_FEMALE }}
