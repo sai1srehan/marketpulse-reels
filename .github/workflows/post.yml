@@ -42,12 +42,16 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           AI_STORIES: ${{ vars.AI_STORIES }}
+          REQUIRE_CLIPS: ${{ vars.REQUIRE_CLIPS || '1' }}
           ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
           ELEVENLABS_VOICE_MALE: ${{ secrets.ELEVENLABS_VOICE_MALE }}
           ELEVENLABS_VOICE_FEMALE: ${{ secrets.ELEVENLABS_VOICE_FEMALE }}
           IG_GRAPH_HOST: https://graph.facebook.com
           IG_USER_ID: ${{ secrets.IG_USER_ID }}
           IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+          FB_APP_SECRET: ${{ secrets.FB_APP_SECRET }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
 
       # Instagram must download the video from a public URL. It is pushed to a
       # throw-away "media" branch (history reset every run) so the repo stays small.
@@ -72,6 +76,7 @@ jobs:
           IG_GRAPH_HOST: https://graph.facebook.com
           MEDIA_BRANCH: media
           IG_USER_ID: ${{ secrets.IG_USER_ID }}
+          FB_APP_SECRET: ${{ secrets.FB_APP_SECRET }}
           IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
           DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && '1' || '0' }}
 
