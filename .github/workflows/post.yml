@@ -1,8 +1,8 @@
-name: Telugu fact Reel
+name: Telugu story Reel
 
 on:
   schedule:
-    # 13:30 UTC = 19:00 IST, once a day (24 subjects = about 24 days of fresh content)
+    # 13:30 UTC = 19:00 IST, once a day (5 stories = 5 days of fresh content)
     - cron: "30 13 * * *"
   workflow_dispatch:
     inputs:
@@ -41,10 +41,10 @@ jobs:
         run: python main.py generate
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
-          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+          AI_STORIES: ${{ vars.AI_STORIES }}
           ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
-          ELEVENLABS_VOICE_ID: ${{ secrets.ELEVENLABS_VOICE_ID }}
+          ELEVENLABS_VOICE_MALE: ${{ secrets.ELEVENLABS_VOICE_MALE }}
+          ELEVENLABS_VOICE_FEMALE: ${{ secrets.ELEVENLABS_VOICE_FEMALE }}
           IG_GRAPH_HOST: https://graph.facebook.com
           IG_USER_ID: ${{ secrets.IG_USER_ID }}
           IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
@@ -75,7 +75,7 @@ jobs:
           IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
           DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && '1' || '0' }}
 
-      - name: Remember posted subjects (avoids repeats)
+      - name: Remember posted stories (avoids repeats)
         if: steps.gen.outputs.has_post == 'true'
         run: |
           git config user.name "reel-bot"
