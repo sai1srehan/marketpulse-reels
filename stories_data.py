@@ -150,3 +150,58 @@ SHOTS = {
         {"lines": [6, 7], "scene": "The lion realizes it is his own reflection and smiles kindly at the rabbit under the moon."},
     ],
 }
+
+
+# ---------------------------------------------------------------------------
+# ACTING + STAGING (used by the built-in 3D-toon renderer, no outside tools)
+# EMOTIONS[story][line] = how the speaker looks while saying that line:
+# neutral happy excited laugh kind proud sly sad angry surprised scared sleepy
+EMOTIONS = {
+    "snake_friend": ["happy", "scared", "kind", "surprised", "kind", "excited", "kind", "proud", "happy"],
+    "lion_mouse": ["neutral", "angry", "scared", "laugh", "neutral", "sad", "kind", "happy"],
+    "tortoise_rabbit": ["neutral", "laugh", "proud", "sly", "neutral", "sleepy", "proud", "neutral", "sad"],
+    "crow_fox": ["neutral", "sly", "sly", "neutral", "proud", "neutral", "laugh", "sad"],
+    "clever_rabbit": ["neutral", "neutral", "kind", "angry", "sly", "surprised", "kind", "happy"],
+}
+
+# STAGING[story]["init"] and STAGING[story][line] update (and persist): pos{cast:x}, pose{cast:idle|run|sleep},
+# lift{cast:px}, emo{cast:emotion} (for non-speakers), props{name:x|cast}
+STAGING = {
+    "snake_friend": {
+        "init": {"emo": {"boy": "happy", "snake": "neutral"}},
+        1: {"pos": {"boy": 190}},
+        3: {"pos": {"boy": 240}},
+        8: {"pos": {"boy": 330}, "emo": {"snake": "happy"}},
+    },
+    "lion_mouse": {
+        "init": {"pose": {"lion": "sleep"}, "emo": {"lion": "sleepy", "mouse": "neutral"}, "pos": {"mouse": 640}},
+        0: {"pos": {"mouse": 520}, "pose": {"mouse": "run"}},
+        1: {"pose": {"lion": "idle", "mouse": "idle"}, "emo": {"lion": "angry", "mouse": "scared"}, "pos": {"mouse": 600}},
+        3: {"emo": {"mouse": "happy"}, "pos": {"mouse": 1420}, "pose": {"mouse": "run"}},
+        4: {"props": {"net": "lion"}, "emo": {"lion": "sad"}},
+        6: {"pos": {"mouse": 520}, "pose": {"mouse": "idle"}, "emo": {"mouse": "kind"}},
+        7: {"props": {}, "emo": {"lion": "happy", "mouse": "happy"}, "pos": {"mouse": 560}},
+    },
+    "tortoise_rabbit": {
+        "init": {"emo": {"rabbit": "happy", "tortoise": "kind"}},
+        2: {"emo": {"rabbit": "sly"}},
+        4: {"pos": {"rabbit": 1500, "tortoise": 880}, "pose": {"rabbit": "run"}},
+        5: {"pos": {"rabbit": 330}, "pose": {"rabbit": "sleep"}, "emo": {"rabbit": "sleepy", "tortoise": "proud"},
+            "props": {"tree": 300}},
+        6: {"pos": {"tortoise": 760}},
+        7: {"pos": {"tortoise": 860}, "props": {"tree": 300, "flag": 960}},
+        8: {"pose": {"rabbit": "idle"}, "emo": {"tortoise": "happy"}},
+    },
+    "crow_fox": {
+        "init": {"lift": {"crow": 330}, "props": {"tree": 290}, "emo": {"crow": "proud", "fox": "sly"}},
+        5: {"pos": {"fox": 540}},
+        6: {"pos": {"fox": 780}, "emo": {"fox": "happy"}},
+        7: {"emo": {"crow": "sad"}},
+    },
+    "clever_rabbit": {
+        "init": {"emo": {"lion": "angry", "rabbit": "neutral"}, "pos": {"rabbit": 330}},
+        4: {"props": {"pond": 540}, "pos": {"lion": 780}},
+        6: {"emo": {"lion": "surprised"}},
+        7: {"emo": {"rabbit": "proud"}},
+    },
+}

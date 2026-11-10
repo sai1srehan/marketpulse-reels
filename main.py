@@ -11,6 +11,7 @@ Env / secrets:
   COOLDOWN_DAYS (default 30), STORY=<id> to force one, DRY_RUN=1 to skip posting
 """
 import asyncio
+import copy
 import datetime as dt
 import hashlib
 import hmac
@@ -27,9 +28,9 @@ import wave
 
 import numpy as np
 import requests
-from PIL import Image, ImageDraw, ImageFilter, ImageFont, features
+from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont, features
 
-from stories_data import CAST, CHARACTER_LOOKS, NARRATOR, SHOTS, STORIES, STYLE
+from stories_data import CAST, CHARACTER_LOOKS, EMOTIONS, NARRATOR, SHOTS, STAGING, STORIES, STYLE
 
 IST = dt.timezone(dt.timedelta(hours=5, minutes=30))
 GRAPH = (os.getenv("IG_GRAPH_HOST", "https://graph.instagram.com").strip().rstrip("/")
@@ -516,6 +517,25 @@ def shadow(frame, cx, cy, rx, alpha=1.0):
 
 
 # --------------------------------------------------------------- characters
+K = 1.35                       # the "world" is drawn at 1.35x so the virtual camera can zoom in sharply
+GROUND = GY * K
+
+EMO = {
+    "neutral":  dict(angry=0.0, lift=0, lid=0.0, eye=1.0, smile=0.25, gape=0.0),
+    "happy":    dict(angry=0.0, lift=3, lid=0.0, eye=1.0, smile=1.0, gape=0.0, sparkle=1),
+    "excited":  dict(angry=0.0, lift=9, lid=0.0, eye=1.12, smile=1.0, gape=0.3, sparkle=1),
+    "laugh":    dict(angry=0.0, lift=4, lid=0.0, eye=1.0, smile=1.0, gape=0.8, arc=1),
+    "kind":     dict(angry=-0.2, lift=2, lid=0.1, eye=1.0, smile=0.85, gape=0.0),
+    "proud":    dict(angry=0.25, lift=0, lid=0.18, eye=1.0, smile=0.7, gape=0.0),
+    "sly":      dict(angry=0.5, lift=0, lid=0.36, eye=0.95, smile=0.8, gape=0.0),
+    "sad":      dict(angry=-0.75, lift=2, lid=0.18, eye=1.06, smile=-0.9, gape=0.0, tear=1),
+    "angry":    dict(angry=0.85, lift=-4, lid=0.12, eye=0.95, smile=-0.6, gape=0.18),
+    "surprised": dict(angry=0.0, lift=17, lid=0.0, eye=1.22, smile=0.0, gape=0.6),
+    "scared":   dict(angry=-0.55, lift=11, lid=0.0, eye=1.15, smile=-0.4, gape=0.22, sweat=1),
+    "sleepy":   dict(angry=0.0, lift=0, lid=1.0, eye=1.0, smile=0.15, gape=0.0, zzz=1),
+}
+
+
 def eye(frame, x, y, r, look, blink, headcol):
     put(frame, sphere(r, r, (250, 250, 252), 0.35, 0.1), x, y)
     px, py = x + look * r * 0.34, y + r * 0.05
@@ -524,18 +544,25 @@ def eye(frame, x, y, r, look, blink, headcol):
     hr = max(2, r * 0.15)
     d.ellipse((px - r * 0.2 - hr, py - r * 0.22 - hr, px - r * 0.2 + hr, py - r * 0.22 + hr), fill=(255, 255, 255))
     if blink > 0:
-        h = max(2, r * 2.1 * blink)
+        h = max(2, r * 2.1 * min(1.0, blink))
         d.ellipse((x - r * 1.08, y - r * 1.08, x + r * 1.08, y - r * 1.08 + h), fill=headcol)
-        if blink > 0.6:
-            d.line((x - r * 0.9, y + r * 0.1, x + r * 0.9, y + r * 0.1), fill=(40, 30, 35), width=5)
+        if blink > 0.9:
+            d.line((x - r * 0.9, y + r * 0.1, x + r * 0.9, y + r * 0.1), fill=(40, 30, 35), width=max(4, int(r * 0.2)))
 
 
-def mouth(frame, x, y, w, op):
+def mouth(frame, x, y, w, op, smile=0.2):
     d = ImageDraw.Draw(frame)
+    lw = max(5, int(w * 0.13))
+    col = (95, 35, 45)
     if op < 0.12:
-        d.arc((x - w / 2, y - w * 0.32, x + w / 2, y + w * 0.32), 15, 165, fill=(95, 35, 45), width=7)
+        if smile > 0.3:
+            d.arc((x - w / 2, y - w * 0.35, x + w / 2, y + w * 0.30), 15, 165, fill=col, width=lw)
+        elif smile < -0.3:
+            d.arc((x - w / 2, y - w * 0.12, x + w / 2, y + w * 0.5), 195, 345, fill=col, width=lw)
+        else:
+            d.line((x - w * 0.3, y, x + w * 0.3, y), fill=col, width=lw)
         return
-    h = 8 + op * 40
+    h = (8 + op * 40) * (w / 50)
     d.ellipse((x - w / 2, y - h / 2, x + w / 2, y + h / 2), fill=(96, 22, 44))
     if op > 0.3:
         d.ellipse((x - w * 0.27, y + h * 0.08, x + w * 0.27, y + h / 2 - 1), fill=(236, 96, 112))
@@ -546,21 +573,90 @@ def blink_amt(t, off):
     return max(0.0, 1 - abs(p - 0.09) / 0.09) if p < 0.18 else 0.0
 
 
-# per-species face geometry relative to head centre: eye(dx, dy, r), mouth(dy, w)
-FACE = {"boy": ((50, -14, 31), (60, 52)), "mouse": ((46, -12, 27), (56, 44)), "rabbit": ((46, -10, 28), (60, 44)),
-        "lion": ((48, -22, 28), (66, 40)), "fox": ((48, -16, 27), (64, 46)), "crow": ((44, -12, 24), (0, 0)),
-        "tortoise": ((40, -8, 22), (44, 44))}
+def star(d, x, y, r, fill):
+    d.polygon([(x, y - r * 1.5), (x + r * 0.4, y - r * 0.4), (x + r * 1.5, y), (x + r * 0.4, y + r * 0.4),
+               (x, y + r * 1.5), (x - r * 0.4, y + r * 0.4), (x - r * 1.5, y), (x - r * 0.4, y - r * 0.4)], fill=fill)
 
 
-def draw_char(frame, ch, cx, t, spk_amp, speaking, look, enter, happy, prop=None):
-    sp, s = ch["species"], ch["scale"]
+def face(frame, cx, cy, s, geo, headcol, look, t, blink_off, e, op, sleeping=False, tilt=0.0, cheeks=True):
+    """Eyes, brows, mouth and acting extras for one head. (cx, cy) = head centre in world pixels."""
+    (edx, edy, er), (mdx, mdy, mw) = geo
+    c, sn = math.cos(math.radians(tilt)), math.sin(math.radians(tilt))
+
+    def R(dx, dy):
+        return cx + (dx * c - dy * sn) * s, cy + (dx * sn + dy * c) * s
+
+    r = er * s * e.get("eye", 1.0)
+    bl = 1.0 if sleeping else max(blink_amt(t, blink_off), e.get("lid", 0.0))
+    d = ImageDraw.Draw(frame)
+    for sgn in (-1, 1):
+        ex, ey = R(sgn * edx, edy)
+        if e.get("arc") and not sleeping:
+            d.arc((ex - r, ey - r * 0.25, ex + r, ey + r * 1.5), 200, 340, fill=(40, 30, 35), width=max(5, int(8 * s)))
+        else:
+            eye(frame, ex, ey, r, look + math.sin(t * 2.3 + sgn) * 0.12, bl, headcol)
+        by = ey - r * 1.55 - e.get("lift", 0) * s
+        w = r * 0.85
+        ang = e.get("angry", 0.0)
+        d.line((ex - sgn * w, by + ang * 14 * s, ex + sgn * w, by - ang * 14 * s), fill=(50, 35, 35), width=max(4, int(8 * s)))
+        if cheeks:
+            put(frame, sphere(22 * s, 14 * s, (255, 150, 150), 0.0, 0.0), *R(sgn * (edx + 28), edy + 40))
+    if mw > 0:
+        mx, my = R(mdx, mdy)
+        mouth(frame, mx, my, mw * s, max(op, e.get("gape", 0.0)), e.get("smile", 0.2))
+    if e.get("tear"):
+        ex, ey = R(-edx, edy)
+        put(frame, sphere(7 * s, 11 * s, (130, 200, 255), 0.7, 0.2), ex, ey + r * 1.15 + ((t * 70) % 55) * s * 0.7)
+    if e.get("sweat"):
+        sx, sy = R(edx * 1.9, edy - er * 2.3)
+        put(frame, sphere(9 * s, 14 * s, (140, 205, 255), 0.7, 0.2), sx, sy + math.sin(t * 5) * 4 * s)
+    if e.get("zzz"):
+        for i in range(3):
+            ph = (t * 0.7 + i * 0.33) % 1
+            size = int((26 + i * 9) * s)
+            d.text((cx + (120 + ph * 80) * s, cy - (80 + ph * 150) * s), "Z", font=latin_font(max(10, size)),
+                   fill=(255, 255, 255), stroke_width=3, stroke_fill=(70, 70, 130))
+    if e.get("sparkle"):
+        for i, sgn in enumerate((-1, 1)):
+            px, py = R(sgn * (edx + 78), edy - 60 - 18 * i)
+            star(d, px, py, max(3, 12 * s * (0.55 + 0.45 * math.sin(t * 6 + i * 2))), (255, 236, 150))
+
+
+# per-species face geometry relative to the head centre: ((eye dx, dy, r), (mouth dx, dy, width))
+FACE = {"boy": ((50, -14, 31), (0, 60, 52)), "mouse": ((46, -12, 27), (0, 56, 44)),
+        "rabbit": ((46, -10, 28), (0, 60, 44)), "lion": ((48, -22, 28), (0, 66, 40)),
+        "fox": ((48, -16, 27), (0, 64, 46)), "crow": ((44, -12, 24), (0, 0, 0)),
+        "tortoise": ((40, -8, 22), (0, 44, 44)), "snake": ((38, -12, 27), (0, 54, 64))}
+
+
+def soft(rx, ry, color, alpha):
+    key = ("soft", _q(rx), _q(ry), tuple(color), alpha)
+    if key not in _SPR:
+        img = sphere(rx, ry, color, 0.1, 0.0).copy()
+        img.putalpha(img.getchannel("A").point(lambda v: int(v * alpha)))
+        _SPR[key] = img
+    return _SPR[key]
+
+
+def draw_char(frame, ch, X, t, amp, speaking, look, enter, happy, emo, moving=0.0, lift=0.0, pose="idle", prop=None):
+    """X = world x. All sizes use s = scale * K, so everything stays crisp when the camera zooms in."""
+    sp, s = ch["species"], ch["scale"] * K
+    e = EMO.get(emo, EMO["neutral"])
+    sleeping = pose == "sleep"
     if sp == "snake":
-        return draw_snake(frame, ch, cx, t, spk_amp, speaking, look, enter, happy)
-    drop = (1 - ease_bounce(enter)) * -950
+        return draw_snake(frame, ch, X, t, amp, speaking, look, enter, happy, e, sleeping)
+    drop = (1 - ease_bounce(enter)) * -950 * K
+    run = 1.0 if pose == "run" else 0.0
+    walk = math.sin(t * 11)
     bob = (-abs(math.sin(t * 9.5)) * 15 * speaking - happy * abs(math.sin(t * 7)) * 24) * s
-    hb = bob * 1.3 - math.sin(t * 9.5 + 0.8) * 4 * speaking
-    X, Y0 = cx + math.sin(t * 1.3) * 4, GY + drop
-    shadow(frame, cx, GY + 8, 150 * s, ease_out(enter))
+    bob += -abs(walk) * 13 * s * moving - abs(math.sin(t * 16)) * 20 * s * run
+    if sleeping:
+        bob += math.sin(t * 2.0) * 3 * s
+    hb = bob * 1.3 - math.sin(t * 9.5 + 0.8) * 4 * speaking + (18 * s if sleeping else 0)
+    Y0 = GROUND + drop - lift * K
+    X = X + math.sin(t * 1.3) * 4
+    shadow(frame, X, GROUND + 8 * K, 150 * s, ease_out(enter) * (0.5 if lift else 1.0))
+    fy = walk * 11 * s * moving + math.sin(t * 16) * 14 * s * run
 
     def part(x, y, rx, ry, col, off=0.0, ang=0, spec=0.45, rim=0.3):
         spr = sphere(rx * s, ry * s, col, spec, rim) if ang == 0 else rot_sphere(rx * s, ry * s, col, ang, spec, rim)
@@ -568,6 +664,11 @@ def draw_char(frame, ch, cx, t, spk_amp, speaking, look, enter, happy, prop=None
 
     c = ch["body"]
     hx, hy, hrx, hry = 0, -410, 128, 120
+    if run:  # dust puffs behind the feet
+        for i in range(4):
+            ph = (t * 3 + i * 0.25) % 1
+            put(frame, soft(26 * s * (0.6 + ph), 18 * s * (0.6 + ph), (225, 205, 170), 0.5 * (1 - ph)),
+                X - 90 * s - ph * 90 * s, Y0 - 10 * s - ph * 30 * s)
     # --- back parts
     if sp == "mouse":
         for i in range(10):
@@ -582,18 +683,18 @@ def draw_char(frame, ch, cx, t, spk_amp, speaking, look, enter, happy, prop=None
     if sp == "crow":
         part(-135, -190, 54, 125, (40, 42, 66), bob, ang=-22)
         part(135, -190, 54, 125, (40, 42, 66), bob, ang=22)
+    arm = 18 + math.sin(t * 8) * 16 * speaking + happy * math.sin(t * 6) * 30
     if sp == "boy":
-        arm = 18 + math.sin(t * 8) * 16 * speaking + happy * math.sin(t * 6) * 30
         part(-165, -230, 36, 100, ch["shirt"], bob, ang=int(arm / 4) * 4)
         part(165, -230, 36, 100, ch["shirt"], bob, ang=-int(arm / 4) * 4)
     # --- feet
     foot = {"crow": (240, 150, 40), "boy": (50, 40, 50), "tortoise": (120, 170, 80)}.get(sp, c)
     if sp == "tortoise":
-        part(-150, -38, 62, 42, foot, 0)
-        part(150, -38, 62, 42, foot, 0)
+        part(-150, -38, 62, 42, foot, fy)
+        part(150, -38, 62, 42, foot, -fy)
     else:
-        part(-70, -22, 56, 30, foot, 0)
-        part(70, -22, 56, 30, foot, 0)
+        part(-70, -22, 56, 30, foot, fy)
+        part(70, -22, 56, 30, foot, -fy)
     if sp == "boy":
         part(-52, -62, 30, 56, ch["skin"], 0)
         part(52, -62, 30, 56, ch["skin"], 0)
@@ -622,9 +723,10 @@ def draw_char(frame, ch, cx, t, spk_amp, speaking, look, enter, happy, prop=None
             part(sgn * 100, -505, 62, 62, c, hb)
             part(sgn * 100, -505, 38, 38, (255, 170, 190), hb, spec=0.1)
     if sp == "rabbit":
+        droop = 10 if e.get("smile", 0) < -0.3 or sleeping else 0
         for sgn in (-1, 1):
-            part(sgn * 56, -610 + math.sin(t * 3 + sgn) * 3, 34, 108, c, hb, ang=-sgn * 8)
-            part(sgn * 56, -605, 18, 84, (255, 175, 195), hb, ang=-sgn * 8, spec=0.1)
+            part(sgn * 56, -610 + math.sin(t * 3 + sgn) * 3 + droop, 34, 108, c, hb, ang=-sgn * (8 + droop * 1.4))
+            part(sgn * 56, -605 + droop, 18, 84, (255, 175, 195), hb, ang=-sgn * (8 + droop * 1.4), spec=0.1)
     if sp == "fox":
         for sgn in (-1, 1):
             part(sgn * 92, -525, 42, 86, c, hb, ang=-sgn * 24)
@@ -648,48 +750,37 @@ def draw_char(frame, ch, cx, t, spk_amp, speaking, look, enter, happy, prop=None
         part(0, -388, 18, 15, (255, 130, 150), hb, spec=0.7)
     if sp == "rabbit":
         part(0, -390, 17, 13, (255, 130, 150), hb, spec=0.7)
-    # --- face
-    (edx, edy, er), (mdy, mw) = FACE[sp]
-    ex, ey = X + hx * s, Y0 + (hy + edy) * s + hb
-    bl = blink_amt(t, ch["blink"])
-    for sgn in (-1, 1):
-        eye(frame, ex + sgn * edx * s, ey, er * s, look, bl, head_col)
+    # --- face (acting)
+    hxw, hyw = X + hx * s, Y0 + hy * s + hb
+    tilt = math.sin(t * 1.7 + ch["blink"]) * 2.0 + math.sin(t * 5) * 3 * speaking + (-5 if e.get("smile", 0) < -0.3 else 0)
+    op = amp if speaking > 0 else 0.0
+    face(frame, hxw, hyw, s, FACE[sp], head_col, look, t, ch["blink"], e, op, sleeping, tilt, cheeks=(sp != "crow"))
     d = ImageDraw.Draw(frame)
-    for sgn in (-1, 1):  # eyebrows
-        lift = spk_amp * 8 * s
-        bx, by = ex + sgn * edx * s, ey - er * s * 1.55 - lift
-        d.line((bx - er * s * 0.8, by + sgn * 3, bx + er * s * 0.8, by - sgn * 3), fill=(50, 35, 35), width=max(4, int(8 * s)))
     if sp == "crow":
         up_y = Y0 + (hy + 40) * s + hb
-        op = spk_amp * 26 * s
-        put(frame, sphere(46 * s, 20 * s, (225, 140, 30), 0.5), X, up_y + 8 * s + op)
-        d.ellipse((X - 30 * s, up_y - 6 * s, X + 30 * s, up_y + 8 * s + op), fill=(110, 30, 40)) if op > 4 else None
+        o = max(op, e.get("gape", 0.0)) * 26 * s
+        put(frame, sphere(46 * s, 20 * s, (225, 140, 30), 0.5), X, up_y + 8 * s + o)
+        if o > 4:
+            d.ellipse((X - 30 * s, up_y - 6 * s, X + 30 * s, up_y + 8 * s + o), fill=(110, 30, 40))
         put(frame, sphere(60 * s, 28 * s, (248, 175, 45), 0.6), X, up_y - 4 * s)
         if prop == "roti":
-            put(frame, sphere(34 * s, 24 * s, (222, 170, 95), 0.5), X + 38 * s, up_y + 14 * s + op)
-    else:
-        mouth(frame, X + hx * s, Y0 + (hy + mdy) * s + hb, mw * s, spk_amp if speaking > 0 else 0.0 + happy * 0.0)
-        if sp == "rabbit" and spk_amp < 0.2:
-            d.rounded_rectangle((X - 12 * s, Y0 + (hy + mdy + 6) * s + hb, X + 12 * s, Y0 + (hy + mdy + 34) * s + hb), 5, fill=(255, 255, 255))
-        if sp in ("mouse", "rabbit", "fox"):
-            for sgn in (-1, 1):
-                for k in (-1, 0, 1):
-                    d.line((X + sgn * 52 * s, Y0 + (hy + 30) * s + hb + k * 8, X + sgn * 118 * s, Y0 + (hy + 24 + k * 12) * s + hb), fill=(60, 55, 60), width=3)
-    if sp in ("boy", "rabbit", "mouse", "fox", "lion", "tortoise"):  # cheeks
+            put(frame, sphere(34 * s, 24 * s, (222, 170, 95), 0.5), X + 38 * s, up_y + 14 * s + o)
+    if sp == "rabbit" and op < 0.2 and e.get("smile", 0) > 0.0:
+        d.rounded_rectangle((X - 12 * s, hyw + 66 * s, X + 12 * s, hyw + 94 * s), 5, fill=(255, 255, 255))
+    if sp in ("mouse", "rabbit", "fox"):
         for sgn in (-1, 1):
-            put(frame, sphere(22 * s, 14 * s, (255, 150, 150), 0.0, 0.0), X + sgn * (edx + 28) * s, ey + 40 * s)
+            for k in (-1, 0, 1):
+                d.line((X + sgn * 52 * s, hyw + 30 * s + k * 8, X + sgn * 118 * s, hyw + (24 + k * 12) * s), fill=(60, 55, 60), width=3)
     if sp == "boy":  # hands in front
-        arm = 18 + math.sin(t * 8) * 16 * speaking + happy * math.sin(t * 6) * 30
         for sgn in (-1, 1):
             a = math.radians(int(arm / 4) * 4) * sgn
-            part(sgn * (165 + math.sin(a) * 96) * 1.0, -230 + (96 * math.cos(a)) * 0.9, 30, 30, ch["skin"], bob)
+            part(sgn * (165 + math.sin(a) * 96), -230 + (96 * math.cos(a)) * 0.9, 30, 30, ch["skin"], bob)
 
 
-def draw_snake(frame, ch, cx, t, amp, speaking, look, enter, happy):
-    s = ch["scale"]
-    shadow(frame, cx + 120, GY + 10, 250, ease_out(enter))
-    slide = (1 - ease_out(enter)) * 700
-    base = cx + slide
+def draw_snake(frame, ch, X, t, amp, speaking, look, enter, happy, e, sleeping):
+    s = ch["scale"] * K
+    shadow(frame, X + 120 * s, GROUND + 10 * K, 250 * s, ease_out(enter))
+    base = X + (1 - ease_out(enter)) * 700 * K
     N = 38
     pts, rads = [], []
     for i in range(N):
@@ -700,37 +791,226 @@ def draw_snake(frame, ch, cx, t, amp, speaking, look, enter, happy):
         if u < 0.6:
             v = u / 0.6
             x = base + (40 + 235 * (1 - v)) * s
-            y = GY - r - 4 - (14 + 14 * math.sin(v * 9 - t * 3.2)) * s * (0.45 + 0.55 * (1 - v))
+            y = GROUND - r - 4 * K - (14 + 14 * math.sin(v * 9 - t * 3.2)) * s * (0.45 + 0.55 * (1 - v))
         else:
             w = (u - 0.6) / 0.4
             x = base + (40 - 76 * w + 26 * math.sin(w * 4.2 - t * 1.6) * w) * s
-            y = GY - r - 18 * s - 405 * s * (w ** 1.05) - happy * abs(math.sin(t * 7)) * 10
+            y = GROUND - r - 18 * s - 405 * s * (w ** 1.05) * (0.8 if sleeping else 1.0) - happy * abs(math.sin(t * 7)) * 10
         pts.append((x, y))
         rads.append(r)
     for i, ((x, y), r) in enumerate(zip(pts, rads)):
         band = 0.78 if (i // 2) % 2 else 1.0
-        base_col = tuple(int(c * band) for c in ch["body"])
-        put(frame, sphere(r, r, base_col, 0.5, 0.35), x, y)
+        put(frame, sphere(r, r, tuple(int(c * band) for c in ch["body"]), 0.5, 0.35), x, y)
     hx, hy = pts[-1]
     hy -= 18 * s
-    sway = math.sin(t * 2.0) * 5
-    hx += sway
-    hrx, hry = 78 * s, 62 * s
-    # tongue
-    if int(t * 1.4) % 3 == 0 and (t * 1.4) % 1 < 0.35 or amp > 0.3:
-        d = ImageDraw.Draw(frame)
-        tx, ty = hx - 10 * s, hy + 44 * s + amp * 18 * s
-        d.line((tx, ty, tx - 30 * s, ty + 54 * s + math.sin(t * 20) * 4), fill=(235, 55, 85), width=8)
-        d.line((tx - 30 * s, ty + 54 * s, tx - 48 * s, ty + 78 * s), fill=(235, 55, 85), width=6)
-        d.line((tx - 30 * s, ty + 54 * s, tx - 12 * s, ty + 80 * s), fill=(235, 55, 85), width=6)
-    put(frame, sphere(hrx, hry, ch["head"], 0.55, 0.35), hx, hy)
-    bl = blink_amt(t, ch["blink"])
-    for sgn in (-1, 1):
-        eye(frame, hx + sgn * 38 * s - 8 * s, hy - 12 * s, 27 * s, look, bl, ch["head"])
+    hx += math.sin(t * 2.0) * 5 * K
     d = ImageDraw.Draw(frame)
+    if (int(t * 1.4) % 3 == 0 and (t * 1.4) % 1 < 0.35) or amp > 0.3:
+        tx, ty = hx - 10 * s, hy + 44 * s + amp * 18 * s
+        d.line((tx, ty, tx - 30 * s, ty + 54 * s + math.sin(t * 20) * 4), fill=(235, 55, 85), width=int(8 * K))
+        d.line((tx - 30 * s, ty + 54 * s, tx - 48 * s, ty + 78 * s), fill=(235, 55, 85), width=int(6 * K))
+        d.line((tx - 30 * s, ty + 54 * s, tx - 12 * s, ty + 80 * s), fill=(235, 55, 85), width=int(6 * K))
+    put(frame, sphere(78 * s, 62 * s, ch["head"], 0.55, 0.35), hx, hy)
     for sgn in (-1, 1):
         d.ellipse((hx + sgn * 12 * s - 8 * s - 4, hy + 16 * s, hx + sgn * 12 * s - 8 * s + 4, hy + 24 * s), fill=(60, 90, 50))
-    mouth(frame, hx - 8 * s, hy + 42 * s, 64 * s, amp if speaking > 0 else 0.0)
+    tilt = math.sin(t * 1.7 + ch["blink"]) * 2.0
+    face(frame, hx - 8 * s, hy, s, FACE["snake"], ch["head"], look, t, ch["blink"], e,
+         amp if speaking > 0 else 0.0, sleeping, tilt, cheeks=False)
+
+
+# --------------------------------------------------------------------- props
+def draw_tree(frame, x, lift):
+    """Big tree with a branch for the crow to stand on (world coords, x in screen px)."""
+    wx, top = x * K, GROUND
+    d = ImageDraw.Draw(frame)
+    tx = wx + 230 * K
+    d.polygon([(tx - 52 * K, top + 12 * K), (tx + 52 * K, top + 12 * K), (tx + 34 * K, top - 1000 * K), (tx - 34 * K, top - 1000 * K)],
+              fill=(98, 66, 46))
+    d.polygon([(tx - 12 * K, top + 12 * K), (tx + 14 * K, top + 12 * K), (tx + 6 * K, top - 1000 * K), (tx - 10 * K, top - 1000 * K)],
+              fill=(122, 86, 60))
+    by = top - lift * K + 6 * K
+    if lift:
+        d.rounded_rectangle((wx - 170 * K, by, tx + 20 * K, by + 40 * K), int(18 * K), fill=(104, 70, 48))
+    for i, (dx, dy, r, col) in enumerate([(-60, -1020, 190, (58, 150, 70)), (110, -1100, 210, (72, 168, 80)),
+                                           (300, -1010, 190, (50, 130, 62)), (40, -930, 160, (80, 176, 86)),
+                                           (230, -940, 170, (60, 150, 72))]):
+        put(frame, sphere(r * K, r * 0.9 * K, col, 0.25, 0.25), tx + dx * K, top + dy * K)
+
+
+def draw_flag(frame, x, t):
+    wx = x * K
+    d = ImageDraw.Draw(frame)
+    d.ellipse((wx - 150 * K, GROUND + 30 * K, wx + 150 * K, GROUND + 60 * K), fill=(245, 245, 245))
+    d.rounded_rectangle((wx - 8 * K, GROUND - 520 * K, wx + 8 * K, GROUND + 40 * K), 6, fill=(240, 240, 240))
+    wave = math.sin(t * 5) * 8 * K
+    sq = 36 * K
+    for i in range(6):
+        for j in range(4):
+            col = (20, 20, 25) if (i + j) % 2 == 0 else (250, 250, 250)
+            x0 = wx + 8 * K + i * sq
+            y0 = GROUND - 520 * K + j * sq + math.sin(t * 5 + i * 0.7) * 6 * K
+            d.rectangle((x0, y0, x0 + sq, y0 + sq), fill=col)
+
+
+def draw_net(frame, cx, cy, rx, ry, cut, t):
+    d = ImageDraw.Draw(frame)
+    rope, dark = (186, 140, 84), (90, 60, 30)
+    lines = []
+    for i in range(-4, 5):
+        pts = [(cx + (i / 4) * rx * math.sqrt(max(0.0, 1 - (yy / ry) ** 2)), cy + yy) for yy in [(-1 + k / 14) * ry for k in range(15)]]
+        lines.append((("v", i), pts))
+    for j in range(-3, 4):
+        yy = (j / 3) * ry * 0.96
+        w = rx * math.sqrt(max(0.0, 1 - (yy / ry) ** 2))
+        lines.append((("h", j), [(cx - w + k / 12 * 2 * w, cy + yy + math.sin(k) * 2) for k in range(13)]))
+    for n, (key, pts) in enumerate(lines):
+        if cut > ((n * 37) % 100) / 100.0 * 0.9 + 0.05:
+            continue
+        d.line(pts, fill=dark, width=int(11 * K))
+    for n, (key, pts) in enumerate(lines):
+        if cut > ((n * 37) % 100) / 100.0 * 0.9 + 0.05:
+            continue
+        d.line(pts, fill=rope, width=int(6 * K))
+
+
+def draw_pond(frame, cx, t, lion=None, emo="surprised"):
+    w, h = int(560 * K), int(250 * K)
+    cy = GROUND + 20 * K
+    patch = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    pd = ImageDraw.Draw(patch)
+    pd.ellipse((0, 0, w - 1, h - 1), fill=(46, 104, 186, 255), outline=(190, 225, 255, 255), width=int(6 * K))
+    pd.ellipse((int(w * 0.06), int(h * 0.1), int(w * 0.94), int(h * 0.9)), fill=(70, 138, 214, 255))
+    if lion is not None:
+        s = lion["scale"] * 0.52 * K
+        refl = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+        parts = [(0, 0, 192, 186, (160, 85, 30)), (0, 0, 128, 120, lion["body"]), (0, 48, 78, 56, (250, 228, 175))]
+        e = EMO.get(emo, EMO["neutral"])
+        for dx, dy, rx, ry, col in parts:
+            spr = sphere(rx * s, ry * s, col, 0.2, 0.1).transpose(Image.FLIP_TOP_BOTTOM)
+            refl.paste(spr, (int(w / 2 + dx * s - spr.width / 2), int(h / 2 - dy * s - spr.height / 2)), spr)
+        rd = ImageDraw.Draw(refl)
+        for sgn in (-1, 1):
+            ex, ey = w / 2 + sgn * 48 * s, h / 2 + 22 * s
+            rd.ellipse((ex - 28 * s, ey - 28 * s, ex + 28 * s, ey + 28 * s), fill=(250, 250, 252))
+            rd.ellipse((ex - 14 * s, ey - 14 * s, ex + 14 * s, ey + 14 * s), fill=(25, 22, 38))
+            rd.line((ex - 34 * s * sgn, ey + 44 * s - e.get("angry", 0) * 10 * s, ex + 30 * s * sgn, ey + 44 * s + e.get("angry", 0) * 10 * s),
+                    fill=(50, 35, 35), width=int(7 * s))
+        rd.ellipse((w / 2 - 22 * s, h / 2 - 58 * s, w / 2 + 22 * s, h / 2 - 40 * s), fill=(85, 42, 32))
+        a = refl.getchannel("A").point(lambda v: int(v * 0.75))
+        mask = Image.new("L", (w, h), 0)
+        ImageDraw.Draw(mask).ellipse((int(w * 0.04), int(h * 0.08), int(w * 0.96), int(h * 0.92)), fill=255)
+        refl.putalpha(ImageChops.multiply(a, mask))
+        patch.alpha_composite(refl)
+    for i in range(3):
+        ph = (t * 0.5 + i / 3) % 1
+        rw, rh = w * (0.2 + 0.7 * ph), h * (0.2 + 0.7 * ph)
+        pd.ellipse((w / 2 - rw / 2, h / 2 - rh / 2, w / 2 + rw / 2, h / 2 + rh / 2), outline=(215, 238, 255, int(200 * (1 - ph))), width=int(3 * K))
+    frame.paste(patch, (int(cx * K - w / 2), int(cy - h / 2)), patch)
+
+
+# --------------------------------------------------------------- atmosphere
+def make_atmosphere(kind, seed):
+    rng = random.Random(seed)
+    P = SCENES[kind]
+    tint = {"day": (255, 238, 190, 20), "sunset": (255, 150, 70, 38), "night": (40, 70, 170, 46)}[kind]
+    vig = Image.new("RGBA", (W, H), tint)
+    arr = np.zeros((H, W), np.float32)
+    yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+    dist = np.sqrt(((xx - W / 2) / (W / 2)) ** 2 + ((yy - H * 0.46) / (H / 2)) ** 2)
+    arr = np.clip((dist - 0.55) / 0.75, 0, 1) ** 1.6 * 150
+    base = np.zeros((H, W, 4), np.uint8)
+    base[..., :3] = (0, 0, 8)
+    base[..., 3] = arr.astype(np.uint8)
+    vig.alpha_composite(Image.fromarray(base, "RGBA"))
+    rays = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    rd = ImageDraw.Draw(rays)
+    sx = int(W * (0.15 + 0.7 * P["sunpos"]) * 0.8)
+    col = {"day": (255, 250, 215, 38), "sunset": (255, 200, 140, 50), "night": (200, 220, 255, 26)}[kind]
+    for i in range(6):
+        a0 = -0.55 + i * 0.22
+        rd.polygon([(sx, 330), (sx + int(a0 * 1500), H), (sx + int((a0 + 0.1) * 1500), H)], fill=col)
+    rays = rays.filter(ImageFilter.GaussianBlur(26))
+    bok = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    for _ in range(7):
+        r = rng.randint(70, 170)
+        x, y = rng.randint(-50, W + 50), rng.randint(1250, 1900)
+        c = rng.choice([(255, 240, 190), (190, 255, 200), (255, 210, 230)]) if kind != "night" else rng.choice([(150, 190, 255), (255, 240, 150)])
+        ImageDraw.Draw(bok).ellipse((x - r, y - r, x + r, y + r), fill=c + (34,))
+    bok = bok.filter(ImageFilter.GaussianBlur(18))
+    leaves = Image.new("RGBA", (W, 760), (0, 0, 0, 0))
+    gcols = [(30, 110, 50), (24, 90, 44), (44, 135, 60)]
+    for side in (0, 1):
+        for _ in range(7):
+            rx, ry = rng.randint(60, 120), rng.randint(130, 230)
+            x = rng.randint(-60, 230) if side == 0 else W - rng.randint(-60, 230)
+            y = rng.randint(380, 800)
+            spr = rot_sphere(rx, ry, rng.choice(gcols) if kind != "night" else (20, 70, 70), rng.randint(-60, 60), 0.2, 0.2)
+            leaves.paste(spr, (int(x - spr.width / 2), int(y - spr.height / 2)), spr)
+    leaves = leaves.filter(ImageFilter.GaussianBlur(9))
+    motes = [(rng.random(), rng.random(), rng.uniform(0.4, 1.6), rng.randint(3, 9), rng.random() * 6.28) for _ in range(46)]
+    return {"grade": vig, "rays": rays, "bokeh": bok, "leaves": leaves, "motes": motes, "kind": kind}
+
+
+_GLOW = {}
+
+
+def glow(r, color, a):
+    k = (r, color, a)
+    if k not in _GLOW:
+        im = Image.new("RGBA", (r * 4, r * 4), (0, 0, 0, 0))
+        ImageDraw.Draw(im).ellipse((r, r, 3 * r, 3 * r), fill=color + (a,))
+        _GLOW[k] = im.filter(ImageFilter.GaussianBlur(r * 0.7))
+    return _GLOW[k]
+
+
+def apply_atmosphere(frame, atm, t):
+    frame.paste(atm["rays"], (int(math.sin(t * 0.35) * 14), 0), atm["rays"])
+    frame.paste(atm["bokeh"], (int(math.sin(t * 0.25) * 18), int(math.cos(t * 0.2) * 12)), atm["bokeh"])
+    night = atm["kind"] == "night"
+    for (x0, y0, sp, r, ph) in atm["motes"]:
+        x = (x0 * W + t * sp * 18 + math.sin(t * 0.7 + ph) * 28) % W
+        y = (y0 * H - t * sp * 12 + math.cos(t * 0.5 + ph) * 18) % H
+        if night:
+            a = int(90 + 140 * (0.5 + 0.5 * math.sin(t * 2.2 + ph * 3)))
+            g = glow(r + 4, (255, 240, 130), min(255, a))
+        else:
+            g = glow(r, (255, 252, 225), 110)
+        frame.paste(g, (int(x - g.width / 2), int(y - g.height / 2)), g)
+    sway = int(math.sin(t * 1.3) * 10)
+    frame.paste(atm["leaves"], (sway, H - 760), atm["leaves"])
+    frame.paste(atm["grade"], (0, 0), atm["grade"])
+
+
+def make_ambience(total, kind, rng):
+    n = int(total * SR)
+    out = np.zeros(n, np.float32)
+    rg = np.random.default_rng(rng.randint(0, 10**6))
+    # soft wind
+    noise = rg.normal(0, 1, n).astype(np.float32)
+    wind = np.convolve(noise, np.ones(900) / 900, mode="same") * (0.5 + 0.5 * np.sin(np.arange(n) / SR * 0.4))
+    out += wind * 0.9
+    tt = np.arange(int(0.16 * SR)) / SR
+    if kind == "night":  # crickets
+        for k in range(int(total * 5)):
+            i0 = int(rg.uniform(0, max(0.1, total - 0.4)) * SR)
+            f = rg.uniform(4200, 5200)
+            for b in range(3):
+                seg = np.sin(2 * np.pi * f * tt[:int(0.05 * SR)]) * np.exp(-30 * tt[:int(0.05 * SR)])
+                j = i0 + b * int(0.07 * SR)
+                m = min(len(seg), n - j)
+                if m > 0:
+                    out[j:j + m] += seg[:m] * 0.08
+    else:  # birds
+        for k in range(int(total * 0.7)):
+            i0 = int(rg.uniform(0, max(0.1, total - 0.5)) * SR)
+            f0 = rg.uniform(2300, 3400)
+            for b in range(rg.integers(2, 5)):
+                seg = np.sin(2 * np.pi * (f0 + 1400 * tt) * tt) * np.exp(-14 * tt)
+                j = i0 + b * int(0.13 * SR)
+                m = min(len(seg), n - j)
+                if m > 0:
+                    out[j:j + m] += seg[:m] * 0.07
+    return out / max(1e-9, np.abs(out).max()) * 0.5
 
 
 # ------------------------------------------------------------------- scenery
@@ -912,23 +1192,53 @@ def build_cast(story):
     return chars
 
 
+def stage_plan(story, segments, chars):
+    """Per-segment staging (positions, poses, lifts, emotions, props) that persists from line to line."""
+    st = STAGING.get(story["id"], {})
+    order = story["cast"]
+    cur = {"pos": {c: chars[c]["slot"] for c in order}, "pose": {c: "idle" for c in order},
+           "lift": {c: 0 for c in order}, "emo": {c: "neutral" for c in order}, "props": {}}
+
+    def merge(upd):
+        for k in ("pos", "pose", "lift", "emo"):
+            cur[k].update(upd.get(k, {}))
+        if "props" in upd:
+            cur["props"] = dict(upd["props"])
+
+    merge(st.get("init", {}))
+    plans = []
+    for seg in segments:
+        if seg["kind"] == "line":
+            merge(st.get(seg["li"], {}))
+        elif seg["kind"] in ("moral", "outro"):
+            for c in order:
+                cur["pose"][c] = "idle"
+                cur["emo"][c] = "happy"
+            cur["props"] = {k: v for k, v in cur["props"].items() if k != "net"}
+        plans.append(copy.deepcopy(cur))
+    return plans
+
+
 def render_video(story, segments, starts, durs, envs, total, audio_path, out_path, story_no, drop_t):
     chars = build_cast(story)
-    order = story["cast"]
-    solid = NARRATOR["color"]
-    back, front = make_scene(story["scene"], hash(story["id"]) % 1000)
+    order, sid = story["cast"], story["id"]
+    emos = EMOTIONS.get(sid, [])
+    plans = stage_plan(story, segments, chars)
+    WK, HK = int(W * K), int(H * K)
+    back, front = make_scene(story["scene"], random.randint(0, 999))
+    back_w = back.resize((int(back.width * K), int(back.height * K)), Image.BILINEAR)
+    front_w = front.resize((int(front.width * K), int(front.height * K)), Image.BILINEAR)
+    atm = make_atmosphere(story["scene"], random.randint(0, 999))
     ribbon_img = ribbon(story["title"], "కథ", (150, 90, 210))
     chip = pill(f"STORY #{story_no:02d}", 32, WHITE, (150, 90, 210, 255), pad=24)
-    card = caption_card(solid)
+    card = caption_card(NARRATOR["color"])
     title_big = Image.new("RGBA", (960, 230), (0, 0, 0, 0))
     td = ImageDraw.Draw(title_big)
     td.rounded_rectangle((0, 0, 959, 229), 60, fill=(255, 255, 255, 245), outline=(150, 90, 210, 255), width=10)
     draw_mixed(td, (480, 70), "ఈ రోజు కథ", 52, (150, 90, 210), anchor="mm")
     draw_mixed(td, (480, 150), story["title"], 80, NAVY, anchor="mm")
     sparkle = [WHITE, GOLD, (255, 150, 200), (150, 220, 255)]
-    chunk_cache = {}
     bounds = [x - 0.3 for x in starts] + [total]
-    # chunks per segment
     chunks = []
     for si, seg in enumerate(segments):
         words = seg["text"].split()
@@ -939,11 +1249,17 @@ def render_video(story, segments, starts, durs, envs, total, audio_path, out_pat
             acc += wt
         col = seg["spk"]["color"]
         for i in range(0, len(words), 3):
-            cw, ws = words[i:i + 3], wst[i:i + 3]
+            cw_, ws = words[i:i + 3], wst[i:i + 3]
             end = wst[i + 3] if i + 3 < len(words) else starts[si] + durs[si] + 0.2
-            chunks.append({"words": cw, "starts": ws, "end": end, "col": col,
-                           "imgs": [render_chunk(cw, a, col) for a in range(len(cw))]})
+            chunks.append({"words": cw_, "starts": ws, "end": end, "col": col,
+                           "imgs": [render_chunk(cw_, a, col) for a in range(len(cw_))]})
     name_chips = {id(seg): pill(seg["spk"]["name"], 36, WHITE, tuple(seg["spk"]["color"]) + (255,), pad=28) for seg in segments}
+    cut_li = {"lion_mouse": 6}.get(sid)
+    cut_start = next((starts[i] for i, sg in enumerate(segments) if sg.get("li") == cut_li and sg["kind"] == "line"), None)
+
+    posn = {c: float(plans[0]["pos"][c]) for c in order}
+    cam = {"cx": WK / 2, "cy": HK / 2, "z": 1.0, "ay": 0.5}
+    dt = 1.0 / FPS
 
     log = open(OUT / "ffmpeg.log", "w")
     proc = subprocess.Popen(
@@ -955,62 +1271,102 @@ def render_video(story, segments, starts, durs, envs, total, audio_path, out_pat
     for fi in range(int(total * FPS)):
         t = fi / FPS
         si = max([i for i, x in enumerate(starts) if t >= x - 0.3] or [0])
-        seg = segments[si]
-        since = t - bounds[si]
+        seg, plan = segments[si], plans[si]
+        since = max(0.0, t - bounds[si])
+        speaker_id = seg["who"] if seg["who"] in chars else None
+        emo_speaker = emos[seg["li"]] if (seg["kind"] == "line" and seg.get("li") is not None and seg["li"] < len(emos)) else "neutral"
+
+        # --- character motion
+        vel = {}
+        for c in order:
+            old = posn[c]
+            posn[c] = old + (plan["pos"][c] - old) * (1 - math.exp(-dt * 2.4))
+            vel[c] = abs(posn[c] - old) / dt
+
+        # --- the world (scene + props + characters), drawn at K x resolution
         pan = 0.5 + 0.5 * math.sin(t * 0.22)
-        frame = back.crop((int(pan * PAD * 0.6), 0, int(pan * PAD * 0.6) + W, H)).copy()
+        px = int(pan * PAD * K * 0.6)
+        world = back_w.crop((px, 0, px + WK, HK))
+        props = plan["props"]
+        if "tree" in props:
+            draw_tree(world, props["tree"], plan["lift"].get("crow", 0))
+        if "flag" in props:
+            draw_flag(world, props["flag"], t)
+        if "pond" in props:
+            lion_c = chars.get("lion")
+            lion_emo = emo_speaker if speaker_id == "lion" else plan["emo"].get("lion", "neutral")
+            draw_pond(world, props["pond"], t, lion_c, lion_emo)
+        speaking_ids = [speaker_id] if (speaker_id and seg["kind"] == "line" and t >= starts[si]) else []
+        amp_arr = envs[si]
+        fidx = int((t - starts[si]) * FPS)
+        amp = float(amp_arr[fidx]) if 0 <= fidx < len(amp_arr) else 0.0
+        happy_phase = seg["kind"] in ("moral", "outro") and t >= starts[si]
+        for cid in sorted(order, key=lambda c: c == speaker_id):
+            ch = chars[cid]
+            idx = order.index(cid)
+            other = order[1 - idx]
+            look = 0.9 if posn[other] > posn[cid] else -0.9
+            is_sp = cid in speaking_ids
+            emo = emo_speaker if (cid == speaker_id and seg["kind"] == "line") else plan["emo"].get(cid, "neutral")
+            moving = min(1.0, vel[cid] / 140.0) if plan["pose"].get(cid) != "run" else 0.0
+            prop = "roti" if (cid == "crow" and story.get("drop_line") is not None and t < drop_t) else None
+            draw_char(world, ch, posn[cid] * K, t + idx * 0.7, amp if is_sp else 0.0, 1.0 if is_sp else 0.0, look,
+                      (t - 0.12 * idx) / 1.0, 0.7 if happy_phase else 0.0, emo, moving, plan["lift"].get(cid, 0),
+                      plan["pose"].get(cid, "idle"), prop)
+        if props.get("net") in chars:
+            lc = chars[props["net"]]
+            ls = lc["scale"] * K
+            cut = 0.0
+            if cut_start is not None and t >= cut_start:
+                cut = min(1.0, (t - cut_start) / (durs[[i for i, sg in enumerate(segments) if sg.get("li") == cut_li][0]] + 0.4))
+            draw_net(world, posn[props["net"]] * K, GROUND - 270 * ls, 235 * ls, 335 * ls, cut, t)
+        if story.get("drop_line") is not None and "crow" in chars and "fox" in chars and t >= drop_t:
+            cs, fs = chars["crow"]["scale"] * K, chars["fox"]["scale"] * K
+            bx0, by0 = posn["crow"] * K + 38 * cs, GROUND - plan["lift"].get("crow", 0) * K - 360 * cs
+            bx1, by1 = posn["fox"] * K, GROUND - 330 * fs
+            k = min(1.0, (t - drop_t) / 1.0)
+            put(world, sphere(34 * K, 24 * K, (222, 170, 95), 0.5), bx0 + (bx1 - bx0) * ease_out(k), by0 + (by1 - by0) * (k ** 2))
+        pxf = int(pan * PAD * K * 0.95)
+        fg = front_w.crop((pxf, 0, pxf + WK, front_w.height))
+        world.paste(fg, (0, int((GY - 50) * K)), fg)
+
+        # --- virtual camera: wide for narration, close-ups / medium shots for dialogue
+        if speaker_id is None or seg["kind"] != "line":
+            tg = {"z": 1.0 + 0.08 * min(1.0, since / 4), "cx": WK / 2, "cy": HK / 2, "ay": 0.5}
+        else:
+            ch = chars[speaker_id]
+            cx_ = posn[speaker_id] * K - (30 * K if ch["species"] == "snake" else 0)
+            head_y = GROUND - plan["lift"].get(speaker_id, 0) * K - (440 if ch["species"] == "snake" else 410) * ch["scale"] * K
+            strong = emo_speaker in ("surprised", "scared", "angry", "sad", "laugh")
+            if strong or len(seg["text"].split()) <= 7:
+                tg = {"z": 1.7 + 0.1 * min(1.0, since / 3), "cx": cx_, "cy": head_y + 40 * ch["scale"] * K, "ay": 0.40}
+            else:
+                tg = {"z": 1.32 + 0.07 * min(1.0, since / 3), "cx": cx_, "cy": head_y + 130 * ch["scale"] * K, "ay": 0.44}
+        f_ = 1 - math.exp(-4.0 * dt)
+        for k_ in cam:
+            cam[k_] += (tg[k_] - cam[k_]) * f_
+        cwid, chei = WK / cam["z"], HK / cam["z"]
+        cwid, chei = WK / max(1.0, cam["z"]), HK / max(1.0, cam["z"])
+        left = min(max(cam["cx"] - 0.5 * cwid + math.sin(t * 0.9) * 5 * K, 0), WK - cwid)
+        top = min(max(cam["cy"] - cam["ay"] * chei + math.cos(t * 0.7) * 4 * K, 0), HK - chei)
+        frame = world.resize((W, H), Image.BILINEAR, box=(left, top, left + cwid, top + chei))
+        apply_atmosphere(frame, atm, t)
         d = ImageDraw.Draw(frame)
 
-        # header
+        # --- UI
         seg_w = (W - 120 - 8 * (len(segments) - 1)) / len(segments)
         for i in range(len(segments)):
             x0 = 60 + i * (seg_w + 8)
-            d.rounded_rectangle((x0, 142, x0 + seg_w, 150), 4, fill=(255, 255, 255, 90) if False else (120, 110, 160))
+            d.rounded_rectangle((x0, 142, x0 + seg_w, 150), 4, fill=(120, 110, 160))
             fill = min(1.0, max(0.0, (t - bounds[i]) / (bounds[i + 1] - bounds[i])))
             if fill > 0:
                 d.rounded_rectangle((x0, 142, x0 + max(8, seg_w * fill), 150), 4, fill=WHITE)
         frame.paste(chip, (60, 172), chip)
         frame.paste(ribbon_img, (60, 262), ribbon_img)
-
-        # characters (listener first, speaker on top)
-        speaker_id = seg["who"] if seg["who"] in chars else None
-        draw_order = sorted(order, key=lambda c: c == speaker_id)
-        amp_arr = envs[si]
-        fidx = int((t - starts[si]) * FPS)
-        amp = float(amp_arr[fidx]) if 0 <= fidx < len(amp_arr) else 0.0
-        happy_phase = seg["kind"] in ("moral", "outro")
-        for cid in draw_order:
-            ch = chars[cid]
-            idx = order.index(cid)
-            other = chars[order[1 - idx]]
-            look = 0.9 if other["slot"] > ch["slot"] else -0.9
-            is_sp = cid == speaker_id and seg["kind"] == "line" and t >= starts[si]
-            enter = (t - 0.12 * idx) / 1.0
-            prop = "roti" if (cid == "crow" and story.get("drop_line") is not None and t < drop_t) else None
-            draw_char(frame, ch, ch["slot"], t + idx * 0.7, amp if is_sp else 0.0, 1.0 if is_sp else 0.0,
-                      look, enter, 0.7 if happy_phase and t >= starts[si] else 0.0, prop)
-        # falling roti (crow & fox story)
-        if story.get("drop_line") is not None and drop_t <= t < drop_t + 1.0 and "crow" in chars:
-            k = (t - drop_t) / 1.0
-            cx0 = chars["crow"]["slot"]
-            fx = cx0 + (chars["fox"]["slot"] - cx0) * 0.5 * ease_out(k) if "fox" in chars else cx0
-            put(frame, sphere(34, 24, (222, 170, 95), 0.5), fx + 38, GY - 400 + 560 * (k ** 2))
-        elif story.get("drop_line") is not None and t >= drop_t + 1.0 and "fox" in chars:
-            fx = (chars["crow"]["slot"] + chars["fox"]["slot"]) / 2
-            put(frame, sphere(34, 24, (222, 170, 95), 0.5), fx + 38, GY - 40)
-
-        # foreground grass
-        px = int(pan * PAD * 0.95)
-        fg = front.crop((px, 0, px + W, front.height))
-        frame.paste(fg, (0, GY - 50), fg)
-
-        # big title in the first segment
         if seg["kind"] == "intro":
             sc = max(0.05, ease_back(since / 0.5))
             tb = title_big.resize((int(820 * sc), int(196 * sc)), Image.BILINEAR)
-            frame.paste(tb, (int(540 - tb.width / 2), int(500 - tb.height / 2)), tb)
-
-        # caption + speaker chip
+            frame.paste(tb, (int(540 - tb.width / 2), int(820 - tb.height / 2)), tb)
         frame.paste(card, (60, 1300), card)
         nc = name_chips[id(seg)]
         frame.paste(nc, (90, 1300 - nc.height // 2), nc)
@@ -1021,11 +1377,8 @@ def render_video(story, segments, starts, durs, envs, total, audio_path, out_pat
             ai = max(i for i, x in enumerate(ch_["starts"]) if t >= x - 0.05)
             img = ch_["imgs"][ai]
             frame.paste(img, ((W - img.width) // 2, 1300 + (290 - img.height) // 2 + 10), img)
-
         if seg["kind"] == "moral":
             confetti(d, since, 77, sparkle)
-        if si > 0 and since < 0.35:
-            pass
         proc.stdin.write(frame.tobytes())
     proc.stdin.close()
     if proc.wait() != 0:
@@ -1202,8 +1555,16 @@ def generate():
     state = load_state()
     ig = recent_ig_titles(ig_user(), ig_token()) if ig_token() else []
     story = choose_story(state, ig)
+    found = {st["id"]: len(story_clips(st["id"])) for st in STORIES}
+    print("Clip files found per story:", json.dumps(found))
     if not story:
-        print("No unused story (all in cooldown). Add more in stories_data.py. Skipping.")
+        if os.getenv("REQUIRE_CLIPS") == "1" and not any(found.values()):
+            print("NO CLIPS FOUND. Add AI clips as clips/<story id>/shot1.mp4, shot2.mp4 ... (see the prompts/ folder), "
+                  "or set the repository variable REQUIRE_CLIPS to 0 to allow the simple cartoon style. Skipping this run.")
+        elif os.getenv("REQUIRE_CLIPS") == "1":
+            print("Stories that have clips were already posted recently (cooldown). Add clips for another story. Skipping.")
+        else:
+            print("No unused story (all in cooldown). Add more in stories_data.py. Skipping.")
         set_output("has_post", "false")
         return
     print(f"Story: {story['title']} ({story['id']})")
@@ -1214,7 +1575,7 @@ def generate():
     segments = [{"kind": "intro", "who": "narrator", "spk": NARRATOR, "text": f"ఈ రోజు కథ, {story['title']}."}]
     drop_idx = None
     for i, (who, text) in enumerate(story["lines"]):
-        segments.append({"kind": "line", "who": who, "spk": NARRATOR if who == "narrator" else CAST[who], "text": text})
+        segments.append({"kind": "line", "li": i, "who": who, "spk": NARRATOR if who == "narrator" else CAST[who], "text": text})
         if story.get("drop_line") == i:
             drop_idx = len(segments) - 1
     segments.append({"kind": "moral", "who": "narrator", "spk": NARRATOR, "text": f"నీతి: {story['moral']}"})
@@ -1226,6 +1587,8 @@ def generate():
     events = [(s - 0.38, "whoosh") for i, s in enumerate(starts) if i > 0 and segments[i]["kind"] in ("moral", "outro")]
     events += [(starts[0] + 0.05, "pop")] + ([(drop_t, "pop")] if drop_idx is not None else [])
     sfx = make_sfx(events, len(voice), rng)
+    amb = make_ambience(total, story["scene"], rng)
+    sfx[:len(amb)] += amb[:len(sfx)] * 0.6
     audio = OUT / "audio.wav"
     mix_audio(voice, music, sfx, audio)
     clips = story_clips(story["id"])
