@@ -38,11 +38,14 @@ jobs:
 
       - name: Build the video
         id: gen
-        run: python main.py series
+        run: python main.py generate
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           AI_STORIES: ${{ vars.AI_STORIES }}
           REQUIRE_CLIPS: ${{ vars.REQUIRE_CLIPS || '0' }}
+          COOLDOWN_DAYS: ${{ vars.COOLDOWN_DAYS || '30' }}
+          SHOW_SUBTITLES: ${{ vars.SHOW_SUBTITLES || '0' }}
+          SHOW_PROGRESS: ${{ vars.SHOW_PROGRESS || '0' }}
           ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
           ELEVENLABS_VOICE_MALE: ${{ secrets.ELEVENLABS_VOICE_MALE }}
           ELEVENLABS_VOICE_FEMALE: ${{ secrets.ELEVENLABS_VOICE_FEMALE }}
@@ -52,6 +55,14 @@ jobs:
           FB_APP_SECRET: ${{ secrets.FB_APP_SECRET }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+
+      - name: Save video for preview
+        if: steps.gen.outputs.has_post == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: reel-preview
+          path: out/reel.mp4
+          retention-days: 3
 
       # Instagram must download the video from a public URL. It is pushed to a
       # throw-away "media" branch (history reset every run) so the repo stays small.
@@ -86,4 +97,4 @@ jobs:
           git config user.name "reel-bot"
           git config user.email "reel-bot@users.noreply.github.com"
           git add state/posted.json
-          git diff --cached --quiet || (git commit -m "Update posted headlines" && git pull --rebase -q && git push -q)
+          git diff --cached --quiet || (git commit -m "Update posted stories" && git pull --rebase -q && git push -q)
