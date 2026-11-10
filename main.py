@@ -13,6 +13,7 @@ Env / secrets:
 import asyncio
 import datetime as dt
 import hashlib
+import hmac
 import json
 import math
 import os
@@ -28,7 +29,7 @@ import numpy as np
 import requests
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, features
 
-from stories_data import CAST, NARRATOR, STORIES
+from stories_data import CAST, CHARACTER_LOOKS, NARRATOR, SHOTS, STORIES, STYLE
 
 IST = dt.timezone(dt.timedelta(hours=5, minutes=30))
 GRAPH = (os.getenv("IG_GRAPH_HOST", "https://graph.instagram.com").strip().rstrip("/")
@@ -39,11 +40,21 @@ def ig_user():
     return (os.getenv("IG_USER_ID") or "me").strip()
 
 
+def sign(params):
+    """Adds appsecret_proof when FB_APP_SECRET is set (needed if the app has 'Require App Secret' ON)."""
+    secret = (os.getenv("FB_APP_SECRET") or "").strip()
+    tok = params.get("access_token")
+    if secret and tok:
+        params["appsecret_proof"] = hmac.new(secret.encode(), tok.encode(), hashlib.sha256).hexdigest()
+    return params
+
+
 def ig_token():
     return (os.getenv("IG_ACCESS_TOKEN") or "").strip()
 OUT = pathlib.Path("out")
 STATE = pathlib.Path("state/posted.json")
 MUSIC_DIR = pathlib.Path("music")
+CLIPS_DIR = pathlib.Path("clips")
 W, H, FPS, SR = 1080, 1920, 30, 44100
 GY = 1190                      # ground line for characters
 SLOT = {0: 290, 1: 780}        # x of left / right character
@@ -113,8 +124,8 @@ def save_state(meta):
 
 def recent_ig_titles(user_id, token):
     try:
-        r = requests.get(f"{GRAPH}/{user_id}/media", params={"fields": "caption", "limit": 25,
-                                                              "access_token": token}, timeout=30)
+        r = requests.get(f"{GRAPH}/{user_id}/media", params=sign({"fields": "caption", "limit": 25,
+                                                                                "access_token": token}), timeout=30)
         r.raise_for_status()
         return [(m.get("caption") or "").split("\n")[0] for m in r.json().get("data", [])]
     except Exception as e:
@@ -169,7 +180,16 @@ def choose_story(state, ig_titles):
     elig = [s for s in STORIES if (s["id"] not in last or now - last[s["id"]] > cooldown)
             and not any(s["title"] in t for t in ig_titles)]
     if not elig:
+        if os.getenv("REQUIRE_CLIPS") == "1":
+            return None
         return ai_story([s["title"] for s in STORIES] + [u.get("title", "") for u in state["used"]])
+    with_clips = [s for s in elig if story_clips(s["id"])]
+    if os.getenv("REQUIRE_CLIPS") == "1":
+        elig = with_clips
+        if not elig:
+            return None
+    elif with_clips:
+        elig = with_clips
     never = [s for s in elig if s["id"] not in last]
     return random.choice(never) if never else min(elig, key=lambda s: last[s["id"]])
 
@@ -1013,7 +1033,170 @@ def render_video(story, segments, starts, durs, envs, total, audio_path, out_pat
         raise RuntimeError("ffmpeg video encode failed")
 
 
+# ------------------------------------------------- cinematic clip mode (AI clips)
+def story_clips(story_id):
+    d = CLIPS_DIR / story_id
+    return sorted(p for p in d.glob("*") if p.suffix.lower() in {".mp4", ".mov", ".webm", ".m4v"}) if d.exists() else []
+
+
+def write_prompts():
+    out = pathlib.Path("prompts")
+    out.mkdir(exist_ok=True)
+    for st in STORIES:
+        shots = SHOTS.get(st["id"], [])
+        lines = [f"# {st['title']}  (folder: clips/{st['id']}/)", "",
+                 "Make one clip per shot, in an AI video tool (image-to-video or text-to-video), 9:16 vertical, ~5 seconds.",
+                 f"Save them as clips/{st['id']}/shot1.mp4, shot2.mp4 ... in order.", "",
+                 f"**Characters (paste into every prompt for consistency):** {CHARACTER_LOOKS.get(st['id'], '')}", "",
+                 f"**Style (paste into every prompt):** {STYLE}", ""]
+        for i, sh in enumerate(shots, 1):
+            spoken = " / ".join(st["lines"][j][1] for j in sh["lines"])
+            lines += [f"## Shot {i}", f"Prompt: {sh['scene']} {CHARACTER_LOOKS.get(st['id'], '')} {STYLE}",
+                      f"(Voice in this shot: {spoken})", ""]
+        (out / f"{st['id']}.md").write_text("\n".join(lines), encoding="utf-8")
+    print(f"Wrote prompts/*.md for {len(STORIES)} stories")
+
+
+class FrameReader:
+    """Decodes a clip to 1080x1920 frames; holds the last frame if the voice runs longer than the clip."""
+
+    def __init__(self, path):
+        self.p = subprocess.Popen(
+            ["ffmpeg", "-loglevel", "error", "-i", str(path), "-vf",
+             f"scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},fps={FPS}",
+             "-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, bufsize=W * H * 3 * 2)
+        self.last = None
+
+    def read(self):
+        buf = self.p.stdout.read(W * H * 3)
+        if len(buf) == W * H * 3:
+            self.last = Image.frombuffer("RGB", (W, H), buf, "raw", "RGB", 0, 1).copy()
+        return self.last
+
+    def close(self):
+        try:
+            self.p.kill()
+        except Exception:
+            pass
+
+
+def shot_of_line(story, line_idx, n_clips):
+    for k, sh in enumerate(SHOTS.get(story["id"], [])):
+        if line_idx in sh["lines"]:
+            return k % n_clips
+    return min(n_clips - 1, line_idx * n_clips // max(1, len(story["lines"])))
+
+
+def render_clip_video(story, segments, starts, durs, total, audio_path, out_path, clips):
+    n = len(clips)
+    seg_clip, li = [], 0
+    for seg in segments:
+        if seg["kind"] == "intro":
+            seg_clip.append(0)
+        elif seg["kind"] == "line":
+            seg_clip.append(shot_of_line(story, li, n))
+            li += 1
+        else:
+            seg_clip.append((n - 1) if n > 1 else 0)
+    bounds = [x - 0.3 for x in starts] + [total]
+    chunks = []
+    for si, seg in enumerate(segments):
+        words = seg["text"].split()
+        weights = [len(w) + 1.5 for w in words]
+        tot, acc, wst = sum(weights), 0.0, []
+        for wt in weights:
+            wst.append(starts[si] + durs[si] * acc / tot)
+            acc += wt
+        col = tuple(seg["spk"]["color"])
+        for i in range(0, len(words), 3):
+            cw, ws = words[i:i + 3], wst[i:i + 3]
+            end = wst[i + 3] if i + 3 < len(words) else starts[si] + durs[si] + 0.2
+            chunks.append({"starts": ws, "end": end, "imgs": [render_chunk(cw, a, col, size=74) for a in range(len(cw))]})
+    card = Image.new("RGBA", (960, 300), (0, 0, 0, 0))
+    ImageDraw.Draw(card).rounded_rectangle((0, 0, 959, 299), 52, fill=(255, 255, 255, 235))
+    chips = {id(sg): pill(sg["spk"]["name"], 34, WHITE, tuple(sg["spk"]["color"]) + (255,), pad=26) for sg in segments}
+    vign = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    vd = ImageDraw.Draw(vign)
+    for y in range(0, 520, 4):
+        vd.rectangle((0, y, W, y + 4), fill=(0, 0, 0, int(120 * (1 - y / 520))))
+    log = open(OUT / "ffmpeg.log", "w")
+    proc = subprocess.Popen(
+        ["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}", "-r", str(FPS),
+         "-i", "-", "-i", str(audio_path), "-map", "0:v", "-map", "1:a", "-c:v", "libx264", "-preset", "veryfast",
+         "-crf", "20", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", "-ac", "2", "-shortest",
+         "-movflags", "+faststart", str(out_path)], stdin=subprocess.PIPE, stderr=log)
+    reader, cur_clip, prev_frame, switch_t, ci = None, -1, None, 0.0, 0
+    blank = Image.new("RGB", (W, H), (20, 20, 30))
+    for fi in range(int(total * FPS)):
+        t = fi / FPS
+        si = max([i for i, x in enumerate(starts) if t >= x - 0.3] or [0])
+        seg = segments[si]
+        if seg_clip[si] != cur_clip:
+            if reader:
+                prev_frame = reader.last
+                reader.close()
+            reader, cur_clip, switch_t = FrameReader(clips[seg_clip[si] % n]), seg_clip[si], t
+        frame = reader.read() or blank
+        if prev_frame is not None and t - switch_t < 0.35:
+            frame = Image.blend(prev_frame, frame, ease_out((t - switch_t) / 0.35))
+        frame = frame.copy()
+        frame.paste(vign, (0, 0), vign)
+        d = ImageDraw.Draw(frame)
+        seg_w = (W - 120 - 8 * (len(segments) - 1)) / len(segments)
+        for i in range(len(segments)):
+            x0 = 60 + i * (seg_w + 8)
+            d.rounded_rectangle((x0, 142, x0 + seg_w, 150), 4, fill=(255, 255, 255, 60) if False else (150, 150, 160))
+            f = min(1.0, max(0.0, (t - bounds[i]) / (bounds[i + 1] - bounds[i])))
+            if f > 0:
+                d.rounded_rectangle((x0, 142, x0 + max(8, seg_w * f), 150), 4, fill=WHITE)
+        frame.paste(card, (60, 250), card)
+        nc = chips[id(seg)]
+        frame.paste(nc, (90, 250 - nc.height // 2), nc)
+        while ci < len(chunks) - 1 and t >= chunks[ci]["end"]:
+            ci += 1
+        c = chunks[ci]
+        if c["starts"][0] - 0.05 <= t < c["end"]:
+            ai = max(i for i, x in enumerate(c["starts"]) if t >= x - 0.05)
+            im = c["imgs"][ai]
+            frame.paste(im, ((W - im.width) // 2, 250 + (300 - im.height) // 2 + 8), im)
+        proc.stdin.write(frame.tobytes())
+    if reader:
+        reader.close()
+    proc.stdin.close()
+    if proc.wait() != 0:
+        print(open(OUT / "ffmpeg.log").read()[-2000:])
+        raise RuntimeError("ffmpeg video encode failed")
+
+
 # ------------------------------------------------------------------ commands
+def telegram_configured():
+    return bool((os.getenv("TELEGRAM_BOT_TOKEN") or "").strip() and (os.getenv("TELEGRAM_CHAT_ID") or "").strip())
+
+
+def telegram_send(video_path, title, caption):
+    """Send the finished video + caption to your phone (post it yourself from the Instagram app)."""
+    if not telegram_configured():
+        return False
+    tok, chat = os.getenv("TELEGRAM_BOT_TOKEN").strip(), os.getenv("TELEGRAM_CHAT_ID").strip()
+    try:
+        with open(video_path, "rb") as f:
+            r = requests.post(f"https://api.telegram.org/bot{tok}/sendVideo",
+                              data={"chat_id": chat, "supports_streaming": "true", "caption": f"📖 {title}"[:1000]},
+                              files={"video": f}, timeout=300)
+        ok = r.ok and r.json().get("ok")
+        if not ok:
+            print("Telegram video failed:", r.status_code, r.text[:300].replace(tok, "***"))
+            return False
+        requests.post(f"https://api.telegram.org/bot{tok}/sendMessage",
+                      data={"chat_id": chat, "text": "Caption to copy:\n\n" + caption[:3800]}, timeout=60)
+        print("Sent to Telegram.")
+        return True
+    except Exception as e:
+        print("Telegram failed:", str(e).replace(tok, "***"))
+        return False
+
+
 def generate():
     OUT.mkdir(exist_ok=True)
     state = load_state()
@@ -1045,7 +1228,12 @@ def generate():
     sfx = make_sfx(events, len(voice), rng)
     audio = OUT / "audio.wav"
     mix_audio(voice, music, sfx, audio)
-    render_video(story, segments, starts, durs, envs, total, audio, OUT / "reel.mp4", story_no, drop_t)
+    clips = story_clips(story["id"])
+    if clips:
+        print(f"Cinematic clip mode: {len(clips)} clips")
+        render_clip_video(story, segments, starts, durs, total, audio, OUT / "reel.mp4", clips)
+    else:
+        render_video(story, segments, starts, durs, envs, total, audio, OUT / "reel.mp4", story_no, drop_t)
 
     tags = " ".join(rng.sample(HASHTAGS, 3) + [story.get("tag", "#story")] + ["#telugu"])
     caption = "\n".join([f"📖 {story['title']}", "", f"నీతి: {story['moral']}", "",
@@ -1054,6 +1242,7 @@ def generate():
     (OUT / "meta.json").write_text(json.dumps({"caption": caption, "video_name": name, "story_id": story["id"],
                                                "title": story["title"]}, ensure_ascii=False))
     print(f"Built out/reel.mp4 ({os.path.getsize(OUT / 'reel.mp4') / 1e6:.1f} MB, {total:.0f}s)")
+    telegram_send(OUT / "reel.mp4", story["title"], caption)
     set_output("has_post", "true")
     set_output("video_name", name)
 
@@ -1064,7 +1253,7 @@ def diagnose():
     base = "https://graph.facebook.com"
     print("---- DIAGNOSTIC (safe to share, contains no token) ----")
     try:
-        r = requests.get(f"{base}/debug_token", params={"input_token": tok, "access_token": tok}, timeout=30)
+        r = requests.get(f"{base}/debug_token", params=sign({"input_token": tok, "access_token": tok}), timeout=30)
         d = (r.json() or {}).get("data", {})
         keep = {k: d.get(k) for k in ("is_valid", "type", "app_id", "application", "scopes", "expires_at",
                                       "data_access_expires_at", "granular_scopes", "error")}
@@ -1075,7 +1264,7 @@ def diagnose():
         print("TOKEN check failed:", e)
     for label, path in (("me", "me?fields=id,name"), ("instagram account", f"{ig_user()}?fields=id,username")):
         try:
-            r = requests.get(f"{base}/{path}", params={"access_token": tok}, timeout=30)
+            r = requests.get(f"{base}/{path}", params=sign({"access_token": tok}), timeout=30)
             print(f"CHECK {label}: {r.status_code} {r.text[:300]}")
         except Exception as e:
             print(f"CHECK {label} failed: {e}")
@@ -1083,7 +1272,7 @@ def diagnose():
 
 
 def api(method, path, **params):
-    r = requests.request(method, f"{GRAPH}/{path}", data=params, timeout=90)
+    r = requests.request(method, f"{GRAPH}/{path}", data=sign(dict(params)), timeout=90)
     if not r.ok:
         hint = ""
         if "blocked" in r.text.lower() or '"code":190' in r.text.replace(" ", ""):
@@ -1123,10 +1312,19 @@ def publish():
     repo = os.environ["GITHUB_REPOSITORY"]
     url = f"https://raw.githubusercontent.com/{repo}/{os.getenv('MEDIA_BRANCH', 'media')}/{meta['video_name']}"
     wait_until_public(url)
-    container = api("POST", f"{user_id}/media", media_type="REELS", video_url=url, caption=meta["caption"],
-                    share_to_feed="true", access_token=token)["id"]
+    try:
+        container = api("POST", f"{user_id}/media", media_type="REELS", video_url=url, caption=meta["caption"],
+                        share_to_feed="true", access_token=token)["id"]
+    except RuntimeError as e:
+        if "blocked" in str(e).lower():
+            print("::warning::Instagram is blocking this app/token (see DIAGNOSTIC above). Video was not posted by the bot.")
+            if telegram_configured():
+                print("The video was sent to Telegram instead; post it from the Instagram app.")
+                save_state(meta)
+                return
+        raise
     for _ in range(60):
-        st = requests.get(f"{GRAPH}/{container}", params={"fields": "status_code,status", "access_token": token},
+        st = requests.get(f"{GRAPH}/{container}", params=sign({"fields": "status_code,status", "access_token": token}),
                           timeout=30).json()
         code = st.get("status_code")
         if code == "FINISHED":
@@ -1143,6 +1341,9 @@ def publish():
 
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else "all"
+    if cmd == "prompts":
+        write_prompts()
+        sys.exit(0)
     if cmd in ("generate", "all"):
         generate()
     if cmd in ("publish", "all"):
