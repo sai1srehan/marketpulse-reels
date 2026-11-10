@@ -38,7 +38,7 @@ jobs:
 
       - name: Build the video
         id: gen
-        run: python main.py generate
+        run: python main.py series
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           AI_STORIES: ${{ vars.AI_STORIES }}
