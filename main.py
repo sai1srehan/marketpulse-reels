@@ -31,8 +31,16 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont, features
 from stories_data import CAST, NARRATOR, STORIES
 
 IST = dt.timezone(dt.timedelta(hours=5, minutes=30))
-GRAPH = (os.getenv("IG_GRAPH_HOST", "https://graph.instagram.com").rstrip("/")
-         + "/" + os.getenv("IG_API_VERSION", "v23.0"))
+GRAPH = (os.getenv("IG_GRAPH_HOST", "https://graph.instagram.com").strip().rstrip("/")
+         + "/" + os.getenv("IG_API_VERSION", "v23.0").strip())
+
+
+def ig_user():
+    return (os.getenv("IG_USER_ID") or "me").strip()
+
+
+def ig_token():
+    return (os.getenv("IG_ACCESS_TOKEN") or "").strip()
 OUT = pathlib.Path("out")
 STATE = pathlib.Path("state/posted.json")
 MUSIC_DIR = pathlib.Path("music")
@@ -1009,7 +1017,7 @@ def render_video(story, segments, starts, durs, envs, total, audio_path, out_pat
 def generate():
     OUT.mkdir(exist_ok=True)
     state = load_state()
-    ig = recent_ig_titles(os.getenv("IG_USER_ID") or "me", os.environ["IG_ACCESS_TOKEN"]) if os.getenv("IG_ACCESS_TOKEN") else []
+    ig = recent_ig_titles(ig_user(), ig_token()) if ig_token() else []
     story = choose_story(state, ig)
     if not story:
         print("No unused story (all in cooldown). Add more in stories_data.py. Skipping.")
@@ -1053,7 +1061,12 @@ def generate():
 def api(method, path, **params):
     r = requests.request(method, f"{GRAPH}/{path}", data=params, timeout=90)
     if not r.ok:
-        raise RuntimeError(f"Graph API error {r.status_code}: {r.text}")
+        hint = ""
+        if "blocked" in r.text.lower() or '"code":190' in r.text.replace(" ", ""):
+            hint = ("\nHINT: Instagram rejected the token/app itself (not the video). Check: 1) the secret has no trailing "
+                    "newline/space, 2) the token in developers.facebook.com/tools/debug/accesstoken is Valid and has "
+                    "instagram_content_publish, 3) the app's Alert Inbox for restrictions, 4) wait 24h if you posted a lot.")
+        raise RuntimeError(f"Graph API error {r.status_code}: {r.text}{hint}")
     return r.json()
 
 
@@ -1074,8 +1087,9 @@ def publish():
     if os.getenv("DRY_RUN") == "1":
         print("DRY_RUN=1 -> not publishing.\n\n" + meta["caption"])
         return
-    user_id = os.getenv("IG_USER_ID") or "me"
-    token = os.environ["IG_ACCESS_TOKEN"]
+    user_id, token = ig_user(), ig_token()
+    if not token:
+        raise RuntimeError("IG_ACCESS_TOKEN secret is empty")
     if any(meta["title"] in t for t in recent_ig_titles(user_id, token)):
         print("This story was already posted recently. Skipping publish.")
         save_state(meta)
