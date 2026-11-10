@@ -1058,6 +1058,30 @@ def generate():
     set_output("video_name", name)
 
 
+def diagnose():
+    """Ask Meta why the token is refused and print facts (never the token itself)."""
+    tok = ig_token()
+    base = "https://graph.facebook.com"
+    print("---- DIAGNOSTIC (safe to share, contains no token) ----")
+    try:
+        r = requests.get(f"{base}/debug_token", params={"input_token": tok, "access_token": tok}, timeout=30)
+        d = (r.json() or {}).get("data", {})
+        keep = {k: d.get(k) for k in ("is_valid", "type", "app_id", "application", "scopes", "expires_at",
+                                      "data_access_expires_at", "granular_scopes", "error")}
+        print("TOKEN:", json.dumps(keep, ensure_ascii=False)[:1500])
+        if not d:
+            print("TOKEN raw:", r.status_code, r.text[:400])
+    except Exception as e:
+        print("TOKEN check failed:", e)
+    for label, path in (("me", "me?fields=id,name"), ("instagram account", f"{ig_user()}?fields=id,username")):
+        try:
+            r = requests.get(f"{base}/{path}", params={"access_token": tok}, timeout=30)
+            print(f"CHECK {label}: {r.status_code} {r.text[:300]}")
+        except Exception as e:
+            print(f"CHECK {label} failed: {e}")
+    print("---- END DIAGNOSTIC ----")
+
+
 def api(method, path, **params):
     r = requests.request(method, f"{GRAPH}/{path}", data=params, timeout=90)
     if not r.ok:
@@ -1066,6 +1090,8 @@ def api(method, path, **params):
             hint = ("\nHINT: Instagram rejected the token/app itself (not the video). Check: 1) the secret has no trailing "
                     "newline/space, 2) the token in developers.facebook.com/tools/debug/accesstoken is Valid and has "
                     "instagram_content_publish, 3) the app's Alert Inbox for restrictions, 4) wait 24h if you posted a lot.")
+        if hint:
+            diagnose()
         raise RuntimeError(f"Graph API error {r.status_code}: {r.text}{hint}")
     return r.json()
 
