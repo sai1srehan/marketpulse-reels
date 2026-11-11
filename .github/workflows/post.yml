@@ -42,6 +42,10 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_MODEL: ${{ vars.GEMINI_MODEL }}
+          OMNI_VIDEOS: ${{ vars.OMNI_VIDEOS || '0' }}
+          OMNI_DAILY_LIMIT: ${{ vars.OMNI_DAILY_LIMIT || '2' }}
+          OMNI_VOICEOVER: ${{ vars.OMNI_VOICEOVER || '0' }}
+          GEMINI_OMNI_MODEL: ${{ vars.GEMINI_OMNI_MODEL }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           AI_STORIES: ${{ vars.AI_STORIES }}
           REQUIRE_CLIPS: ${{ vars.REQUIRE_CLIPS || '0' }}
