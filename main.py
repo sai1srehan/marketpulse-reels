@@ -239,7 +239,7 @@ def _build_ai_story(raw, pair, scene_hint):
     scene = raw.get("scene") if raw.get("scene") in ("day", "sunset", "night") else scene_hint
     assert TELUGU_RE.search(raw["title"]) and TELUGU_RE.search(raw["moral"]), "title/moral not Telugu"
     items = raw["lines"]
-    assert 8 <= len(items) <= 13, "line count"
+    assert 5 <= len(items) <= 12, "line count"
     lines, emotions, staging, cut_line, drop_line = [], [], {}, None, None
     props_now = {}
     for i, it in enumerate(items):
@@ -275,7 +275,9 @@ def _build_ai_story(raw, pair, scene_hint):
             staging[i] = upd
     extra = [t for t in (raw.get("hashtags") or []) if isinstance(t, str) and re.fullmatch(r"#[A-Za-z0-9_]{3,30}", t)]
     tag = raw.get("tag") if isinstance(raw.get("tag"), str) and re.fullmatch(r"#[A-Za-z0-9_]{3,30}", raw.get("tag", "")) else "#story"
-    story = {"id": "ai-" + hashlib.md5(raw["title"].encode()).hexdigest()[:8], "title": raw["title"].strip(), "scene": scene,
+    hook = str(raw.get("hook", "")).strip()
+    hook = hook if (TELUGU_RE.search(hook) and len(hook.split()) <= 14) else ""
+    story = {"id": "ai-" + hashlib.md5(raw["title"].encode()).hexdigest()[:8], "title": raw["title"].strip(), "scene": scene, "hook": hook,
              "cast": cast, "tag": tag, "hashtags": extra, "lines": lines, "moral": raw["moral"].strip(),
              "emotions": emotions, "staging": staging}
     if cut_line is not None:
@@ -301,7 +303,8 @@ No violence, nothing scary or sad for long, no politics or religion, no real bra
 Do NOT repeat or closely imitate any of these titles: {json.dumps(used_titles[-40:], ensure_ascii=False)}
 and avoid these morals: {json.dumps(used_morals[-40:], ensure_ascii=False)}
 
-Language: simple, warm, natural SPOKEN Telugu (everyday words). 9 to 12 lines, each at most 22 words; mix narrator lines with the two characters talking.
+Language: simple, warm, natural SPOKEN Telugu (everyday words). 6 to 8 lines, each at most 14 words (the whole reel must stay under 30 seconds); mix narrator lines with the two characters talking.
+Also write a \"hook\": ONE short Telugu teaser question or surprising statement (max 10 words) that makes people want to watch to the end (for example about what will happen), and make the moral something people want to send to a friend.
 Each line is an object:
   "who": "narrator" or one of {pair}
   "text": the Telugu line
@@ -313,7 +316,7 @@ Optional staging (include only when something CHANGES; it persists to later line
   "others": {{"<character id>": emotion}}  how a NON-speaking character looks
   "props": {{"tree": x, "flag": x, "pond": x, "net": "<character id>"}}  give the FULL current set whenever it changes; "pond" shows the lion's reflection if a lion is present
   "drop": true  (only for a crow and fox story: the crow drops its bread on this line)
-Return ONLY JSON: {{"title": "Telugu title", "scene": "...", "cast": {json.dumps(pair)}, "moral": "one Telugu sentence",
+Return ONLY JSON: {{"title": "Telugu title", "hook": "Telugu teaser (max 10 words)", "scene": "...", "cast": {json.dumps(pair)}, "moral": "one Telugu sentence",
 "tag": "#englishtag", "hashtags": ["#kidsstories", "#moralstory"], "lines": [ ... ]}}"""
     for attempt in range(3):
         try:
@@ -1408,7 +1411,7 @@ def render_video(story, segments, starts, durs, envs, total, audio_path, out_pat
     title_big = Image.new("RGBA", (960, 230), (0, 0, 0, 0))
     td = ImageDraw.Draw(title_big)
     td.rounded_rectangle((0, 0, 959, 229), 60, fill=(255, 255, 255, 245), outline=(150, 90, 210, 255), width=10)
-    draw_mixed(td, (480, 70), "ఈ రోజు కథ", 52, (150, 90, 210), anchor="mm")
+    draw_mixed(td, (480, 70), "చివరి వరకు చూడండి", 52, (150, 90, 210), anchor="mm")
     draw_mixed(td, (480, 150), story["title"], 80, NAVY, anchor="mm")
     sparkle = [WHITE, GOLD, (255, 150, 200), (150, 220, 255)]
     bounds = [x - 0.3 for x in starts] + [total]
@@ -1732,11 +1735,14 @@ Rules: kid-friendly; no violence; no politics or religion; no real people; no br
 Do NOT reuse or imitate these titles: {json.dumps(used_titles[-40:], ensure_ascii=False)}
 and avoid these morals: {json.dumps(used_morals[-40:], ensure_ascii=False)}
 Do not use matchsticks, firecrackers, candles or airports as the idea.
+The FIRST 2 SECONDS must already show the surprising or emotional moment (no slow intro), and the last second should flow back into the first so the reel loops.
+The Telugu \"caption\" must be something people want to send to a friend, and add a Telugu \"question\" that invites a real comment.
 
 Return ONLY JSON with these keys:
 "title": short Telugu title
 "caption": the Telugu message shown on screen at the top (max 18 words, 1 or 2 emotional sentences, simple spoken Telugu)
 "moral": one Telugu sentence
+"question": one short Telugu question that invites a real comment
 "video_prompt": ONE English prompt for the video model, at least 120 words. Start with: "Pixar-style 3D animated short film, cinematic lighting, shallow depth of field, vertical 9:16." Describe each character's exact look
 (colours, shapes, big expressive eyes), the setting, lighting, camera moves (close-ups, slow push-ins) and a clear emotional story in timed beats:
 [0-4s] ... [4-8s] ... [8-12s] ... [12-15s] ... with small physical interactions (a hug, sharing, helping). Sound design: emotional cinematic background music with a steady soft beat and a gentle melodic humming vocal line (no lyrics), plus sparkle, whoosh and small magical sound effects that match the action.
@@ -1912,7 +1918,7 @@ def generate_omni(state, ig_titles):
         if tg not in tag_list:
             tag_list.append(tg)
     caption = "\n".join([f"📖 {idea['title']}", "", idea["caption"], "", f"నీతి: {idea['moral']}", "",
-                         "మీకు నచ్చిందా? కామెంట్ చేయండి 👇 ఫాలో అవ్వండి!", "", " ".join(tag_list[:5])])[:2200]
+                         "ఈ రీల్ మీ స్నేహితుడికి పంపండి 💌", (idea.get("question") or "మీకు నచ్చిందా? కామెంట్‌లో చెప్పండి 👇") + " 👇", "", " ".join(tag_list[:5])])[:2200]
     name = f"reel-{now.strftime('%Y%m%d-%H%M')}.mp4"
     (OUT / "meta.json").write_text(json.dumps({"caption": caption, "video_name": name,
                                                "story_id": "omni-" + hashlib.md5(idea["title"].encode()).hexdigest()[:8],
@@ -2030,7 +2036,7 @@ def top_up_ideas(state, ig_titles):
             break
         n = state.get("next_idea_id", 1)
         state["next_idea_id"] = n + 1
-        idea = {k: idea.get(k) for k in ("title", "caption", "moral", "video_prompt", "tag", "hashtags")} | {"id": n}
+        idea = {k: idea.get(k) for k in ("title", "caption", "question", "moral", "video_prompt", "tag", "hashtags")} | {"id": n}
         state["ideas"].append(idea)
         print(f"New idea #{n}: {idea['title']}\n--- prompt for Gemini/Flow ---\n{idea['video_prompt']}\n------------------------------")
         publish_idea(idea)
@@ -2131,7 +2137,7 @@ def generate_manual(state, ig_titles):
                 if tg not in tag_list:
                     tag_list.append(tg)
             caption = "\n".join([f"📖 {idea['title']}", "", idea["caption"], "", f"నీతి: {idea['moral']}", "",
-                                 "మీకు నచ్చిందా? కామెంట్ చేయండి 👇 ఫాలో అవ్వండి!", "", " ".join(tag_list[:5])])[:2200]
+                                 "ఈ రీల్ మీ స్నేహితుడికి పంపండి 💌", (idea.get("question") or "మీకు నచ్చిందా? కామెంట్‌లో చెప్పండి 👇") + " 👇", "", " ".join(tag_list[:5])])[:2200]
             name = f"reel-{now.strftime('%Y%m%d-%H%M')}.mp4"
             (OUT / "meta.json").write_text(json.dumps({"caption": caption, "video_name": name,
                                                        "story_id": "clip-" + hashlib.md5(idea["title"].encode()).hexdigest()[:8],
@@ -2206,14 +2212,15 @@ def generate():
     rng = random.Random(int(now.timestamp()))
     story_no = len(state["used"]) + 1
 
-    segments = [{"kind": "intro", "who": "narrator", "spk": NARRATOR, "text": f"ఈ రోజు కథ, {story['title']}."}]
+    hook_text = story.get("hook") or f"{story['title']}. చివరి వరకు చూడండి!"
+    segments = [{"kind": "intro", "who": "narrator", "spk": NARRATOR, "text": hook_text}]
     drop_idx = None
     for i, (who, text) in enumerate(story["lines"]):
         segments.append({"kind": "line", "li": i, "who": who, "spk": NARRATOR if who == "narrator" else CAST[who], "text": text})
         if story.get("drop_line") == i:
             drop_idx = len(segments) - 1
     segments.append({"kind": "moral", "who": "narrator", "spk": NARRATOR, "text": f"నీతి: {story['moral']}"})
-    segments.append({"kind": "outro", "who": "narrator", "spk": NARRATOR, "text": "ఈ కథ నచ్చితే ఫాలో అవ్వండి, మీ స్నేహితులకు షేర్ చేయండి."})
+    segments.append({"kind": "outro", "who": "narrator", "spk": NARRATOR, "text": "ఈ కథ మీ స్నేహితుడికి పంపండి, ఫాలో అవ్వండి."})
 
     voice, starts, durs, envs, total = make_voice(segments)
     drop_t = starts[drop_idx] + 0.6 if drop_idx is not None else 1e9
@@ -2237,8 +2244,8 @@ def generate():
         if tg not in tag_list:
             tag_list.append(tg)
     tags = " ".join(tag_list[:5])  # Instagram allows at most 5 hashtags
-    caption = "\n".join([f"📖 {story['title']}", "", f"నీతి: {story['moral']}", "",
-                         "మీకు ఈ కథ నచ్చిందా? కామెంట్ చేయండి 👇 ఫాలో అవ్వండి!", "", tags])[:2200]
+    caption = "\n".join([f"📖 {story['title']}"] + ([story["hook"]] if story.get("hook") else []) + ["", f"నీతి: {story['moral']}", "",
+                         "ఈ రీల్ మీ స్నేహితుడికి పంపండి 💌", "మీకు ఏ పాత్ర బాగా నచ్చింది? కామెంట్‌లో చెప్పండి 👇", "", tags])[:2200]
     name = f"reel-{now.strftime('%Y%m%d-%H%M')}.mp4"
     (OUT / "meta.json").write_text(json.dumps({"caption": caption, "video_name": name, "story_id": story["id"],
                                                "title": story["title"], "moral": story["moral"]}, ensure_ascii=False))
