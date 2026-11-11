@@ -40,6 +40,8 @@ jobs:
         id: gen
         run: python main.py generate
         env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: ${{ vars.GEMINI_MODEL }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           AI_STORIES: ${{ vars.AI_STORIES }}
           REQUIRE_CLIPS: ${{ vars.REQUIRE_CLIPS || '0' }}
