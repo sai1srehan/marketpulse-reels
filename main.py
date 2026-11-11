@@ -11,6 +11,7 @@ Env / secrets:
   COOLDOWN_DAYS (default 30), STORY=<id> to force one, DRY_RUN=1 to skip posting
 """
 import asyncio
+import base64
 import copy
 import datetime as dt
 import hashlib
@@ -1699,6 +1700,230 @@ def render_clip_video(story, segments, starts, durs, total, audio_path, out_path
 
 
 # ------------------------------------------------------------------ commands
+# ------------------------------------------------ Gemini Omni mode (AI-made cinematic video)
+OMNI_MODEL = (os.getenv("GEMINI_OMNI_MODEL") or "gemini-omni-1.2-flash").strip()
+GEN_BASE = "https://generativelanguage.googleapis.com/v1beta"
+
+
+def omni_wanted():
+    return os.getenv("OMNI_VIDEOS") == "1" and bool(gemini_key())
+
+
+def omni_today_count():
+    today = dt.datetime.now(dt.timezone.utc).date().isoformat()
+    return sum(1 for x in load_state().get("omni", []) if str(x).startswith(today))
+
+
+def record_omni():
+    st = load_state()
+    st.setdefault("omni", []).append(dt.datetime.now(dt.timezone.utc).isoformat())
+    st["omni"] = st["omni"][-200:]
+    STATE.parent.mkdir(exist_ok=True)
+    STATE.write_text(json.dumps(st, ensure_ascii=False, indent=1))
+
+
+def omni_concept(used_titles, used_morals):
+    """Gemini invents one original 15-second micro-story: Telugu caption + an English video prompt."""
+    prompt = f"""You are the creative director of a Telugu Instagram Reels page that posts short, heart-touching animated films.
+Invent ONE original 15-second Pixar-style 3D animated micro-story with a clear, positive, shareable message.
+Cast: two or three cute, expressive personified characters (animals, everyday objects, plants...) in an Indian setting
+(a festival, village lane, school, kitchen, garden, Hyderabad street, monsoon, harvest...). Warm cinematic look.
+Rules: kid-friendly; no violence; no politics or religion; no real people; no brands or copyrighted characters.
+Do NOT reuse or imitate these titles: {json.dumps(used_titles[-40:], ensure_ascii=False)}
+and avoid these morals: {json.dumps(used_morals[-40:], ensure_ascii=False)}
+Do not use matchsticks, firecrackers, candles or airports as the idea.
+
+Return ONLY JSON with these keys:
+"title": short Telugu title
+"caption": the Telugu message shown on screen at the top (max 18 words, 1 or 2 emotional sentences, simple spoken Telugu)
+"moral": one Telugu sentence
+"video_prompt": ONE English prompt for the video model, at least 120 words. Start with: "Pixar-style 3D animated short film, cinematic lighting, shallow depth of field, vertical 9:16." Describe each character's exact look
+(colours, shapes, big expressive eyes), the setting, lighting, camera moves (close-ups, slow push-ins) and a clear emotional story in timed beats:
+[0-4s] ... [4-8s] ... [8-12s] ... [12-15s] ... with small physical interactions (a hug, sharing, helping). Sound design: soft emotional instrumental music and gentle sound effects.
+End with: "No dialogue. No on-screen text, no subtitles, no logos."
+"tag": one English hashtag for the theme, "hashtags": ["#kidsstories", "#moralstory"]"""
+    for attempt in range(3):
+        try:
+            raw = json.loads(re.sub(r"^```(?:json)?|```$", "", llm_json_text(prompt).strip(), flags=re.M).strip())
+            assert all(TELUGU_RE.search(str(raw.get(k, ""))) for k in ("title", "caption", "moral")), "Telugu fields missing"
+            assert len(str(raw.get("video_prompt", ""))) > 200, "video prompt too short"
+            if any(_sim(raw["title"], t) > 0.5 for t in used_titles) or any(_sim(raw["moral"], m_) > 0.5 for m_ in used_morals if m_):
+                raise ValueError("too similar to an earlier video")
+            return raw
+        except Exception as e:
+            print(f"Omni concept attempt {attempt + 1} failed: {e}")
+            if attempt < 2:
+                time.sleep(8 * (attempt + 1))
+    return None
+
+
+def _find_video(node):
+    if isinstance(node, dict):
+        if node.get("type") == "video" and (node.get("data") or node.get("uri")):
+            return node
+        for v in node.values():
+            r = _find_video(v)
+            if r:
+                return r
+    elif isinstance(node, list):
+        for v in node:
+            r = _find_video(v)
+            if r:
+                return r
+    return None
+
+
+def omni_generate(video_prompt, out_path):
+    """One call = one clip (up to 15 s, 9:16, with native audio). Costs about $0.07 per second at 720p."""
+    hdr = {"x-goog-api-key": gemini_key(), "Content-Type": "application/json"}
+    body = {"model": OMNI_MODEL, "input": video_prompt,
+            "response_format": {"type": "video", "aspect_ratio": "9:16", "resolution": "720p", "duration": "15s", "delivery": "uri"}}
+    r = requests.post(f"{GEN_BASE}/interactions", headers=hdr, json={**body, "store": False, "background": False, "stream": False}, timeout=900)
+    if r.status_code == 400 and ("Unknown name" in r.text or "Invalid JSON" in r.text):
+        r = requests.post(f"{GEN_BASE}/interactions", headers=hdr, json=body, timeout=900)  # retry without the optional flags
+    if not r.ok:
+        hint = ""
+        if r.status_code in (401, 403):
+            hint = " (check the key, and that billing is enabled: Omni has no free tier)"
+        elif r.status_code == 429:
+            hint = " (rate limit or daily quota reached)"
+        elif r.status_code == 404:
+            hint = " (model not available to this key; set GEMINI_OMNI_MODEL)"
+        raise RuntimeError(f"Omni request failed {r.status_code}{hint}: {r.text[:300]}")
+    data = r.json()
+    iid = data.get("id")
+    waited = 0
+    while data.get("status") not in (None, "completed") and iid and waited < 600:
+        if data.get("status") in ("failed", "cancelled", "incomplete"):
+            raise RuntimeError(f"Omni generation {data.get('status')}: {str(data)[:300]}")
+        time.sleep(10)
+        waited += 10
+        data = requests.get(f"{GEN_BASE}/interactions/{iid}", headers=hdr, timeout=60).json()
+    vid = _find_video(data)
+    if not vid:
+        raise RuntimeError(f"Omni returned no video: {str(data)[:300]}")
+    if vid.get("data"):
+        out_path.write_bytes(base64.b64decode(vid["data"]))
+        return
+    m = re.search(r"files/([A-Za-z0-9_-]+)", vid["uri"])
+    for _ in range(60):  # wait until the hosted file is ready
+        if not m:
+            break
+        info = requests.get(f"{GEN_BASE}/files/{m.group(1)}", headers=hdr, timeout=60).json()
+        if info.get("state") in (None, "ACTIVE"):
+            break
+        if info.get("state") == "FAILED":
+            raise RuntimeError("Omni video file failed")
+        time.sleep(5)
+    with requests.get(vid["uri"], headers={"x-goog-api-key": gemini_key()}, stream=True, timeout=300) as resp:
+        resp.raise_for_status()
+        size = 0
+        with open(out_path, "wb") as f:
+            for chunk in resp.iter_content(1 << 20):
+                size += len(chunk)
+                if size > 120 * 1024 * 1024:
+                    raise RuntimeError("video too large")
+                f.write(chunk)
+
+
+def has_audio(path):
+    p = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "a", "-show_entries", "stream=codec_type",
+                        "-of", "csv=p=0", str(path)], capture_output=True, text=True)
+    return "audio" in p.stdout
+
+
+def caption_png(text, width, size, path):
+    tmp = ImageDraw.Draw(Image.new("RGBA", (10, 10)))
+    lines, cur = [], ""
+    for w in text.split():
+        test = f"{cur} {w}".strip()
+        if cur and mixed_width(tmp, test, size) > width - 70:
+            lines.append(cur)
+            cur = w
+        else:
+            cur = test
+    if cur:
+        lines.append(cur)
+    lh = int(size * 1.5)
+    img = Image.new("RGBA", (width, lh * len(lines) + 24), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    for i, ln in enumerate(lines):
+        draw_mixed(d, (width / 2, 10 + i * lh), ln, size, (255, 255, 255, 255), anchor="mt", sw=max(3, size // 10))
+    img.save(path)
+    return img.height
+
+
+def finish_omni_video(raw, caption, out_path):
+    """Re-encode for Instagram (30 fps, H.264/AAC) and put the Telugu caption on top like the reference reel."""
+    probe = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height",
+                            "-of", "csv=s=x:p=0", str(raw)], capture_output=True, text=True).stdout.strip()
+    vw, vh = (int(x) for x in probe.split("x")) if "x" in probe else (720, 1280)
+    png = OUT / "omni_caption.png"
+    caption_png(caption, vw, max(34, vw // 17), png)
+    y = int(vh * 0.115)
+    audio = has_audio(raw)
+    cmd = ["ffmpeg", "-y", "-loglevel", "error", "-i", str(raw), "-loop", "1", "-i", str(png)]
+    voice = None
+    if os.getenv("OMNI_VOICEOVER") == "1":
+        mp3, voice = OUT / "omni_voice.mp3", OUT / "omni_voice.wav"
+        tts(caption, mp3, NARRATOR)
+        run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(mp3), "-ar", str(SR), "-ac", "1", "-c:a", "pcm_s16le", str(voice)])
+        cmd += ["-i", str(voice)]
+    fc = f"[0:v]fps=30,format=yuv420p[v0];[1:v]format=rgba,fade=t=in:st=0.5:d=0.7:alpha=1[c];[v0][c]overlay=0:{y}:shortest=1[v]"
+    maps = ["-map", "[v]"]
+    if voice and audio:
+        fc += ";[0:a]volume=0.5[a0];[2:a]adelay=900|900[a1];[a0][a1]amix=inputs=2:duration=first:normalize=0[a]"
+        maps += ["-map", "[a]"]
+    elif voice:
+        fc += ";[2:a]adelay=900|900[a]"
+        maps += ["-map", "[a]"]
+    elif audio:
+        maps += ["-map", "0:a"]
+    cmd += ["-filter_complex", fc] + maps + ["-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p",
+                                             "-c:a", "aac", "-b:a", "192k", "-ac", "2", "-movflags", "+faststart", "-t", "15.5", str(out_path)]
+    run(cmd)
+
+
+def generate_omni(state, ig_titles):
+    """Returns True if a finished reel was written. Never raises: any problem means 'use the built-in engine'."""
+    limit = int(os.getenv("OMNI_DAILY_LIMIT", "2"))
+    if omni_today_count() >= limit:
+        print(f"Omni daily limit ({limit}) reached; using the built-in engine to protect your budget.")
+        return False
+    try:
+        used_titles = [u.get("title", "") for u in state["used"]] + [t.replace("📖", "").strip() for t in ig_titles]
+        used_morals = [u.get("moral", "") for u in state["used"]]
+        idea = omni_concept([t for t in used_titles if t], [m_ for m_ in used_morals if m_])
+        if not idea:
+            return False
+        print(f"Omni idea: {idea['title']}")
+        raw = OUT / "omni_raw.mp4"
+        omni_generate(idea["video_prompt"], raw)
+        record_omni()
+        now = dt.datetime.now(IST)
+        finish_omni_video(raw, idea["caption"], OUT / "reel.mp4")
+    except Exception as e:
+        print(f"Omni video failed: {str(e)[:500]}")
+        return False
+    tag_list = []
+    extra = [t for t in (idea.get("hashtags") or []) if isinstance(t, str) and re.fullmatch(r"#[A-Za-z0-9_]{3,30}", t)]
+    tag = idea.get("tag") if re.fullmatch(r"#[A-Za-z0-9_]{3,30}", str(idea.get("tag", ""))) else "#story"
+    for tg in [tag] + extra[:2] + ["#telugureels", "#teluguanimation", "#moralstories", "#telugu"]:
+        if tg not in tag_list:
+            tag_list.append(tg)
+    caption = "\n".join([f"📖 {idea['title']}", "", idea["caption"], "", f"నీతి: {idea['moral']}", "",
+                         "మీకు నచ్చిందా? కామెంట్ చేయండి 👇 ఫాలో అవ్వండి!", "", " ".join(tag_list[:5])])[:2200]
+    name = f"reel-{now.strftime('%Y%m%d-%H%M')}.mp4"
+    (OUT / "meta.json").write_text(json.dumps({"caption": caption, "video_name": name,
+                                               "story_id": "omni-" + hashlib.md5(idea["title"].encode()).hexdigest()[:8],
+                                               "title": idea["title"], "moral": idea["moral"]}, ensure_ascii=False))
+    print(f"Built out/reel.mp4 with Gemini Omni ({os.path.getsize(OUT / 'reel.mp4') / 1e6:.1f} MB)")
+    telegram_send(OUT / "reel.mp4", idea["title"], caption)
+    set_output("has_post", "true")
+    set_output("video_name", name)
+    return True
+
+
 def telegram_configured():
     return bool((os.getenv("TELEGRAM_BOT_TOKEN") or "").strip() and (os.getenv("TELEGRAM_CHAT_ID") or "").strip())
 
@@ -1730,6 +1955,8 @@ def generate():
     OUT.mkdir(exist_ok=True)
     state = load_state()
     ig = recent_ig_titles(ig_user(), ig_token()) if ig_token() else []
+    if omni_wanted() and generate_omni(state, ig):
+        return
     story = choose_story(state, ig)
     found = {st["id"]: len(story_clips(st["id"])) for st in STORIES}
     print("Clip files found per story:", json.dumps(found))
