@@ -118,7 +118,7 @@ def load_state():
 
 def save_state(meta):
     st = load_state()
-    st["used"].append({"id": meta["story_id"], "title": meta["title"],
+    st["used"].append({"id": meta["story_id"], "title": meta["title"], "moral": meta.get("moral", ""),
                        "ts": dt.datetime.now(dt.timezone.utc).isoformat()})
     st["used"] = st["used"][-400:]
     STATE.parent.mkdir(exist_ok=True)
@@ -136,33 +136,198 @@ def recent_ig_titles(user_id, token):
         return []
 
 
-def ai_story(used_titles):
-    """Optional: Claude writes a NEW short moral story. Always review AI Telugu on your page."""
-    key = os.getenv("ANTHROPIC_API_KEY")
-    if not key or os.getenv("AI_STORIES") != "1":
-        return None
-    prompt = (
-        "Write ONE new short moral story (traditional Panchatantra/Aesop style, your own wording) for kids in simple, "
-        "natural spoken Telugu. Exactly 2 characters from this list: " + ", ".join(CAST) + ". 8 to 10 lines; each line max 22 words; "
-        "mix a few 'narrator' lines with character lines. Do NOT reuse these titles: " + ", ".join(used_titles) + ". "
-        'Return ONLY JSON: {"title":"Telugu title","scene":"day|sunset|night","cast":["id1","id2"],"tag":"#englishtag",'
-        '"lines":[["narrator","..."],["id1","..."]],"moral":"one Telugu sentence"}')
+def _tri(t):
+    x = re.sub(r"[^a-z0-9\u0C00-\u0C7F]+", "_", (t or "").lower())
+    return {x[i:i + 3] for i in range(len(x) - 2)}
+
+
+def _sim(a, b):
+    ta, tb = _tri(a), _tri(b)
+    return len(ta & tb) / max(1, len(ta | tb))
+
+
+TELUGU_RE = re.compile(r"[\u0C00-\u0C7F]")
+POSES = {"idle", "run", "sleep"}
+
+
+def gemini_key():
+    return (os.getenv("GEMINI_API_KEY") or "").strip()
+
+
+def anthropic_key():
+    return (os.getenv("ANTHROPIC_API_KEY") or "").strip()
+
+
+def ai_enabled():
+    return bool(gemini_key() or anthropic_key()) and os.getenv("AI_STORIES") != "0"
+
+
+_GEMINI_MODELS = None
+
+
+def gemini_models():
+    """Newest 'gemini-X-flash' your key can use (auto-detected), or GEMINI_MODEL if you set it."""
+    global _GEMINI_MODELS
+    if _GEMINI_MODELS is not None:
+        return _GEMINI_MODELS
+    forced = (os.getenv("GEMINI_MODEL") or "").strip()
+    if forced:
+        _GEMINI_MODELS = [forced]
+        return _GEMINI_MODELS
+    found = []
     try:
-        r = requests.post("https://api.anthropic.com/v1/messages",
-                          headers={"x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"},
-                          json={"model": os.getenv("CLAUDE_MODEL", "claude-sonnet-5-5"), "max_tokens": 2000,
-                                "messages": [{"role": "user", "content": prompt}]}, timeout=90)
+        r = requests.get("https://generativelanguage.googleapis.com/v1beta/models",
+                         headers={"x-goog-api-key": gemini_key()}, params={"pageSize": 200}, timeout=30)
         r.raise_for_status()
-        text = re.sub(r"^```(?:json)?|```$", "", r.json()["content"][0]["text"].strip(), flags=re.M).strip()
-        s = json.loads(text)
-        assert len(s["cast"]) == 2 and all(c in CAST for c in s["cast"]) and s["scene"] in ("day", "sunset", "night")
-        s["lines"] = [tuple(x) for x in s["lines"]]
-        assert 6 <= len(s["lines"]) <= 14 and all(w == "narrator" or w in s["cast"] for w, _ in s["lines"])
-        s["id"] = "ai-" + hashlib.md5(s["title"].encode()).hexdigest()[:8]
-        return s
+        for md in r.json().get("models", []):
+            name = md.get("name", "").replace("models/", "")
+            mm = re.fullmatch(r"gemini-(\d+(?:\.\d+)*)-flash", name)
+            if mm and "generateContent" in md.get("supportedGenerationMethods", []):
+                found.append((tuple(int(x) for x in mm.group(1).split(".")), name))
     except Exception as e:
-        print(f"AI story failed: {e}")
+        print(f"Gemini model list failed ({e}); using built-in names")
+    found.sort(reverse=True)
+    names = [n for _, n in found][:3] + ["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-2.5-flash"]
+    _GEMINI_MODELS = list(dict.fromkeys(names))
+    return _GEMINI_MODELS
+
+
+def llm_json_text(prompt):
+    """Ask the configured AI (Gemini first if GEMINI_API_KEY is set, otherwise Claude) and return its raw text."""
+    if gemini_key():
+        for model in list(gemini_models()):
+            try:
+                r = requests.post(f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+                                  headers={"x-goog-api-key": gemini_key(), "Content-Type": "application/json"},
+                                  json={"contents": [{"role": "user", "parts": [{"text": prompt}]}],
+                                        "generationConfig": {"responseMimeType": "application/json", "temperature": 1.0,
+                                                             "maxOutputTokens": 8192}}, timeout=180)
+                if r.status_code == 404:
+                    print(f"Gemini model {model} not available, trying the next one")
+                    continue
+                r.raise_for_status()
+                parts = r.json()["candidates"][0]["content"]["parts"]
+                text = "".join(p.get("text", "") for p in parts if not p.get("thought"))
+                if text.strip():
+                    if gemini_models()[0] != model:  # remember the model that works
+                        gemini_models().remove(model)
+                        gemini_models().insert(0, model)
+                    print(f"Story written by Gemini ({model})")
+                    return text
+                print(f"Gemini {model} returned no text: {str(r.json())[:200]}")
+            except requests.HTTPError as e:
+                print(f"Gemini {model} failed: {e.response.status_code} {e.response.text[:200]}")
+                if e.response.status_code in (400, 401, 403, 429):
+                    break
+            except Exception as e:
+                print(f"Gemini {model} error: {e}")
+        raise RuntimeError("Gemini did not return a story")
+    r = requests.post("https://api.anthropic.com/v1/messages",
+                      headers={"x-api-key": anthropic_key(), "anthropic-version": "2023-06-01", "content-type": "application/json"},
+                      json={"model": os.getenv("CLAUDE_MODEL", "claude-sonnet-5-5"), "max_tokens": 4000,
+                            "messages": [{"role": "user", "content": prompt}]}, timeout=120)
+    r.raise_for_status()
+    print("Story written by Claude")
+    return r.json()["content"][0]["text"]
+
+
+def _build_ai_story(raw, pair, scene_hint):
+    """Validate Claude's JSON and convert it into the same structures the hand-written stories use."""
+    cast = raw["cast"]
+    assert isinstance(cast, list) and sorted(cast) == sorted(pair), "wrong cast"
+    scene = raw.get("scene") if raw.get("scene") in ("day", "sunset", "night") else scene_hint
+    assert TELUGU_RE.search(raw["title"]) and TELUGU_RE.search(raw["moral"]), "title/moral not Telugu"
+    items = raw["lines"]
+    assert 8 <= len(items) <= 13, "line count"
+    lines, emotions, staging, cut_line, drop_line = [], [], {}, None, None
+    props_now = {}
+    for i, it in enumerate(items):
+        who, text = it["who"], str(it["text"]).strip()
+        assert who == "narrator" or who in cast, f"bad speaker {who}"
+        assert TELUGU_RE.search(text) and 1 <= len(text.split()) <= 26, "bad line"
+        lines.append((who, text))
+        emo = it.get("emo", "neutral")
+        emotions.append(emo if emo in EMO else "neutral")
+        upd = {}
+        if isinstance(it.get("pos"), dict):
+            upd["pos"] = {k: float(v) for k, v in it["pos"].items() if k in cast and -300 <= float(v) <= 1600}
+        if isinstance(it.get("pose"), dict):
+            upd["pose"] = {k: v for k, v in it["pose"].items() if k in cast and v in POSES}
+        if isinstance(it.get("lift"), dict):
+            upd["lift"] = {k: max(0, min(450, int(v))) for k, v in it["lift"].items() if k in cast}
+        if isinstance(it.get("others"), dict):
+            upd["emo"] = {k: v for k, v in it["others"].items() if k in cast and v in EMO}
+        if isinstance(it.get("props"), dict):
+            pr = {}
+            for name, val in it["props"].items():
+                if name in ("tree", "flag", "pond") and -100 <= float(val) <= 1200:
+                    pr[name] = float(val)
+                elif name == "net" and val in cast:
+                    pr["net"] = val
+            if props_now.get("net") and not pr.get("net") and i > 0:
+                cut_line = i - 1
+            props_now = pr
+            upd["props"] = pr
+        if it.get("drop") and "crow" in cast and "fox" in cast:
+            drop_line = i
+        if upd:
+            staging[i] = upd
+    extra = [t for t in (raw.get("hashtags") or []) if isinstance(t, str) and re.fullmatch(r"#[A-Za-z0-9_]{3,30}", t)]
+    tag = raw.get("tag") if isinstance(raw.get("tag"), str) and re.fullmatch(r"#[A-Za-z0-9_]{3,30}", raw.get("tag", "")) else "#story"
+    story = {"id": "ai-" + hashlib.md5(raw["title"].encode()).hexdigest()[:8], "title": raw["title"].strip(), "scene": scene,
+             "cast": cast, "tag": tag, "hashtags": extra, "lines": lines, "moral": raw["moral"].strip(),
+             "emotions": emotions, "staging": staging}
+    if cut_line is not None:
+        story["cut_line"] = cut_line
+    if drop_line is not None:
+        story["drop_line"] = drop_line
+    return story
+
+
+def ai_story(used_titles, used_morals):
+    """The AI (Gemini or Claude) writes a brand-new kids' moral story: script, acting and staging."""
+    if not ai_enabled():
         return None
+    pair = random.sample(list(CAST), 2)
+    scene_hint = random.choice(["day", "sunset", "night"])
+    names = {c: f"{c} ({CAST[c]['name']})" for c in pair}
+    prompt = f"""You write short moral stories for a Telugu kids' Instagram Reel. A 3D-toon engine will act them out.
+
+Characters (use EXACTLY these two, no others): {names[pair[0]]} and {names[pair[1]]}, plus a "narrator".
+Scene look: "{scene_hint}" (you may change it to day, sunset or night if the story needs).
+Write a NEW, original kid-friendly story with a clear, positive moral (traditional-fable style is fine, retold in your own words).
+No violence, nothing scary or sad for long, no politics or religion, no real brands or copyrighted characters.
+Do NOT repeat or closely imitate any of these titles: {json.dumps(used_titles[-40:], ensure_ascii=False)}
+and avoid these morals: {json.dumps(used_morals[-40:], ensure_ascii=False)}
+
+Language: simple, warm, natural SPOKEN Telugu (everyday words). 9 to 12 lines, each at most 22 words; mix narrator lines with the two characters talking.
+Each line is an object:
+  "who": "narrator" or one of {pair}
+  "text": the Telugu line
+  "emo": how the speaker looks: one of {list(EMO)}
+Optional staging (include only when something CHANGES; it persists to later lines):
+  "pos": {{"<character id>": x}}  x is screen position 150..900 (left character starts ~290, right ~780); use 1450 to run off-screen right
+  "pose": {{"<character id>": "idle"|"run"|"sleep"}}
+  "lift": {{"<character id>": pixels}}  e.g. 330 to stand on a tree branch
+  "others": {{"<character id>": emotion}}  how a NON-speaking character looks
+  "props": {{"tree": x, "flag": x, "pond": x, "net": "<character id>"}}  give the FULL current set whenever it changes; "pond" shows the lion's reflection if a lion is present
+  "drop": true  (only for a crow and fox story: the crow drops its bread on this line)
+Return ONLY JSON: {{"title": "Telugu title", "scene": "...", "cast": {json.dumps(pair)}, "moral": "one Telugu sentence",
+"tag": "#englishtag", "hashtags": ["#kidsstories", "#moralstory"], "lines": [ ... ]}}"""
+    for attempt in range(3):
+        try:
+            text = llm_json_text(prompt)
+            text = re.sub(r"^```(?:json)?|```$", "", text.strip(), flags=re.M).strip()
+            story = _build_ai_story(json.loads(text), pair, scene_hint)
+            if any(_sim(story["title"], t) > 0.5 for t in used_titles) or any(_sim(story["moral"], m_) > 0.5 for m_ in used_morals if m_):
+                raise ValueError("too similar to an earlier story")
+            print(f"AI story written: {story['title']} ({pair[0]} + {pair[1]})")
+            return story
+        except Exception as e:
+            print(f"AI story attempt {attempt + 1} failed: {e}")
+            if attempt < 2:
+                time.sleep(8 * (attempt + 1))  # give a temporary rate limit time to clear
+    return None
 
 
 def choose_story(state, ig_titles):
@@ -171,6 +336,13 @@ def choose_story(state, ig_titles):
         for s in STORIES:
             if s["id"] == forced:
                 return s
+    if ai_enabled() and os.getenv("REQUIRE_CLIPS") != "1":
+        used_titles = [u.get("title", "") for u in state["used"]] + [x["title"] for x in STORIES] + [t.replace("📖", "").strip() for t in ig_titles]
+        used_morals = [u.get("moral", "") for u in state["used"]] + [x["moral"] for x in STORIES]
+        story = ai_story([t for t in used_titles if t], [m_ for m_ in used_morals if m_])
+        if story:
+            return story
+        print("AI story unavailable: falling back to the built-in stories.")
     now = dt.datetime.now(dt.timezone.utc)
     cooldown = dt.timedelta(days=int(os.getenv("COOLDOWN_DAYS", "30")))
     last = {}
@@ -183,9 +355,7 @@ def choose_story(state, ig_titles):
     elig = [s for s in STORIES if (s["id"] not in last or now - last[s["id"]] > cooldown)
             and not any(s["title"] in t for t in ig_titles)]
     if not elig:
-        if os.getenv("REQUIRE_CLIPS") == "1":
-            return None
-        return ai_story([s["title"] for s in STORIES] + [u.get("title", "") for u in state["used"]])
+        return None
     with_clips = [s for s in elig if story_clips(s["id"])]
     if os.getenv("REQUIRE_CLIPS") == "1":
         elig = with_clips
@@ -1196,7 +1366,7 @@ def build_cast(story):
 
 def stage_plan(story, segments, chars):
     """Per-segment staging (positions, poses, lifts, emotions, props) that persists from line to line."""
-    st = STAGING.get(story["id"], {})
+    st = story.get("staging") or STAGING.get(story["id"], {})
     order = story["cast"]
     cur = {"pos": {c: chars[c]["slot"] for c in order}, "pose": {c: "idle" for c in order},
            "lift": {c: 0 for c in order}, "emo": {c: "neutral" for c in order}, "props": {}}
@@ -1224,7 +1394,7 @@ def stage_plan(story, segments, chars):
 def render_video(story, segments, starts, durs, envs, total, audio_path, out_path, story_no, drop_t):
     chars = build_cast(story)
     order, sid = story["cast"], story["id"]
-    emos = EMOTIONS.get(sid, [])
+    emos = story.get("emotions") or EMOTIONS.get(sid, [])
     plans = stage_plan(story, segments, chars)
     WK, HK = int(W * K), int(H * K)
     back, front = make_scene(story["scene"], random.randint(0, 999))
@@ -1256,7 +1426,7 @@ def render_video(story, segments, starts, durs, envs, total, audio_path, out_pat
             chunks.append({"words": cw_, "starts": ws, "end": end, "col": col,
                            "imgs": [render_chunk(cw_, a, col) for a in range(len(cw_))]})
     name_chips = {id(seg): pill(seg["spk"]["name"], 36, WHITE, tuple(seg["spk"]["color"]) + (255,), pad=28) for seg in segments}
-    cut_li = {"lion_mouse": 6}.get(sid)
+    cut_li = story.get("cut_line", {"lion_mouse": 6}.get(sid))
     cut_start = next((starts[i] for i, sg in enumerate(segments) if sg.get("li") == cut_li and sg["kind"] == "line"), None)
 
     posn = {c: float(plans[0]["pos"][c]) for c in order}
@@ -1604,12 +1774,16 @@ def generate():
     else:
         render_video(story, segments, starts, durs, envs, total, audio, OUT / "reel.mp4", story_no, drop_t)
 
-    tags = " ".join(rng.sample(HASHTAGS, 3) + [story.get("tag", "#story")] + ["#telugu"])
+    tag_list = []
+    for tg in [story.get("tag", "#story")] + (story.get("hashtags") or [])[:2] + rng.sample(HASHTAGS, 3) + ["#telugu"]:
+        if tg not in tag_list:
+            tag_list.append(tg)
+    tags = " ".join(tag_list[:5])  # Instagram allows at most 5 hashtags
     caption = "\n".join([f"📖 {story['title']}", "", f"నీతి: {story['moral']}", "",
                          "మీకు ఈ కథ నచ్చిందా? కామెంట్ చేయండి 👇 ఫాలో అవ్వండి!", "", tags])[:2200]
     name = f"reel-{now.strftime('%Y%m%d-%H%M')}.mp4"
     (OUT / "meta.json").write_text(json.dumps({"caption": caption, "video_name": name, "story_id": story["id"],
-                                               "title": story["title"]}, ensure_ascii=False))
+                                               "title": story["title"], "moral": story["moral"]}, ensure_ascii=False))
     print(f"Built out/reel.mp4 ({os.path.getsize(OUT / 'reel.mp4') / 1e6:.1f} MB, {total:.0f}s)")
     telegram_send(OUT / "reel.mp4", story["title"], caption)
     set_output("has_post", "true")
