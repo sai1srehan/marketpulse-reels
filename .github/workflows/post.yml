@@ -1,9 +1,12 @@
 name: Telugu story Reel
 
 on:
+  push:
+    paths:
+      - "inbox/**"
   schedule:
-    # 13:30 UTC = 19:00 IST, once a day (5 stories = 5 days of fresh content)
-    - cron: "30 13 * * *"
+    # every 6 hours the bot tops up video ideas; uploading a video to inbox/ posts it right away
+    - cron: "20 */6 * * *"
   workflow_dispatch:
     inputs:
       dry_run:
@@ -13,6 +16,7 @@ on:
 
 permissions:
   contents: write
+  issues: write
 
 concurrency:
   group: reel-bot
@@ -42,6 +46,10 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_MODEL: ${{ vars.GEMINI_MODEL }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MANUAL_VIDEOS: ${{ vars.MANUAL_VIDEOS || '0' }}
+          MANUAL_PENDING_MAX: ${{ vars.MANUAL_PENDING_MAX || '2' }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && '1' || '0' }}
           OMNI_VIDEOS: ${{ vars.OMNI_VIDEOS || '0' }}
           OMNI_DAILY_LIMIT: ${{ vars.OMNI_DAILY_LIMIT || '2' }}
           OMNI_VOICEOVER: ${{ vars.OMNI_VOICEOVER || '0' }}
@@ -97,10 +105,10 @@ jobs:
           IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
           DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && '1' || '0' }}
 
-      - name: Remember posted stories (avoids repeats)
-        if: steps.gen.outputs.has_post == 'true'
+      - name: Save bot memory (ideas, posted stories, inbox)
         run: |
           git config user.name "reel-bot"
           git config user.email "reel-bot@users.noreply.github.com"
-          git add state/posted.json
-          git diff --cached --quiet || (git commit -m "Update posted stories" && git pull --rebase -q && git push -q)
+          git add -A state
+          for d in inbox ideas; do if [ -d $d ]; then git add -A $d; fi; done
+          git diff --cached --quiet || (git commit -m "Update bot state" && git pull --rebase -q && git push -q)
