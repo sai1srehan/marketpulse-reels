@@ -1739,8 +1739,8 @@ Return ONLY JSON with these keys:
 "moral": one Telugu sentence
 "video_prompt": ONE English prompt for the video model, at least 120 words. Start with: "Pixar-style 3D animated short film, cinematic lighting, shallow depth of field, vertical 9:16." Describe each character's exact look
 (colours, shapes, big expressive eyes), the setting, lighting, camera moves (close-ups, slow push-ins) and a clear emotional story in timed beats:
-[0-4s] ... [4-8s] ... [8-12s] ... [12-15s] ... with small physical interactions (a hug, sharing, helping). Sound design: soft emotional instrumental music and gentle sound effects.
-End with: "No dialogue. No on-screen text, no subtitles, no logos."
+[0-4s] ... [4-8s] ... [8-12s] ... [12-15s] ... with small physical interactions (a hug, sharing, helping). Sound design: emotional cinematic background music with a steady soft beat and a gentle melodic humming vocal line (no lyrics), plus sparkle, whoosh and small magical sound effects that match the action.
+End with: "No spoken dialogue. No on-screen text, no subtitles, no logos."
 "tag": one English hashtag for the theme, "hashtags": ["#kidsstories", "#moralstory"]"""
     for attempt in range(3):
         try:
@@ -1924,6 +1924,233 @@ def generate_omni(state, ig_titles):
     return True
 
 
+# -------------------------------- manual mode: you make the clip with your own Gemini plan, the bot does the rest
+INBOX = pathlib.Path("inbox")
+
+
+def manual_wanted():
+    return os.getenv("MANUAL_VIDEOS") == "1"
+
+
+def save_state_dict(st):
+    STATE.parent.mkdir(exist_ok=True)
+    STATE.write_text(json.dumps(st, ensure_ascii=False, indent=1))
+
+
+def tg_post(method, params=None, timeout=60):
+    tok = (os.getenv("TELEGRAM_BOT_TOKEN") or "").strip()
+    r = requests.post(f"https://api.telegram.org/bot{tok}/{method}", data=params or {}, timeout=timeout)
+    return r.json()
+
+
+def tg_say(text):
+    if not telegram_configured():
+        return
+    try:
+        tg_post("sendMessage", {"chat_id": os.getenv("TELEGRAM_CHAT_ID").strip(), "text": text[:3900]})
+    except Exception as e:
+        print("Telegram message failed:", str(e).replace(os.getenv("TELEGRAM_BOT_TOKEN", "x"), "***"))
+
+
+def gh_headers():
+    tok = (os.getenv("GH_TOKEN") or os.getenv("GITHUB_TOKEN") or "").strip()
+    return {"Authorization": f"Bearer {tok}", "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}
+
+
+def gh_ready():
+    return bool((os.getenv("GH_TOKEN") or os.getenv("GITHUB_TOKEN") or "").strip() and os.getenv("GITHUB_REPOSITORY"))
+
+
+def idea_markdown(i, mention=""):
+    return (f"{mention}\n" if mention else "") + (
+        f"# Video idea #{i['id']}: {i['title']}\n\n"
+        f"**Telugu caption the bot will put on the video:** {i['caption']}\n\n"
+        "## What to do\n"
+        "1. Open **Gemini** (or **Google Flow**) with your Google AI plan, choose **Gemini Omni Flash**, vertical **9:16**, **15 seconds**.\n"
+        "2. Paste the prompt below and generate the video, then download it.\n"
+        f"3. In this repo open the **inbox** folder > **Add file** > **Upload files**, upload the video named **{i['id']}.mp4**, and commit.\n"
+        "The bot adds the Telugu caption and posts it to Instagram within a minute or two.\n\n"
+        "## Prompt to paste\n\n```text\n" + i["video_prompt"] + "\n```\n")
+
+
+def publish_idea(idea):
+    """Make the idea easy to find without any extra app: a file in the repo, the run summary, and an Issue."""
+    d = pathlib.Path("ideas")
+    d.mkdir(exist_ok=True)
+    (d / f"idea-{idea['id']}.md").write_text(idea_markdown(idea), encoding="utf-8")
+    summ = os.getenv("GITHUB_STEP_SUMMARY")
+    if summ:
+        with open(summ, "a", encoding="utf-8") as f:
+            f.write(idea_markdown(idea) + "\n")
+    if gh_ready() and os.getenv("MANUAL_ISSUES") != "0":
+        try:
+            owner = os.getenv("GITHUB_REPOSITORY_OWNER", "")
+            r = requests.post(f"https://api.github.com/repos/{os.environ['GITHUB_REPOSITORY']}/issues", headers=gh_headers(),
+                              json={"title": f"Video idea #{idea['id']}: {idea['title']}",
+                                    "body": idea_markdown(idea, mention=f"@{owner}" if owner else "")}, timeout=30)
+            if r.status_code == 201:
+                idea["issue"] = r.json().get("number")
+            else:
+                print("Issue creation failed:", r.status_code, r.text[:200])
+        except Exception as e:
+            print("Issue creation failed:", e)
+
+
+def finish_idea_files(idea):
+    try:
+        os.remove(pathlib.Path("ideas") / f"idea-{idea['id']}.md")
+    except OSError:
+        pass
+    if idea.get("issue") and gh_ready():
+        try:
+            requests.patch(f"https://api.github.com/repos/{os.environ['GITHUB_REPOSITORY']}/issues/{idea['issue']}",
+                           headers=gh_headers(), json={"state": "closed"}, timeout=30)
+        except Exception:
+            pass
+
+
+def idea_message(i):
+    return (f"🎬 New video idea #{i['id']}: {i['title']}\n\n"
+            "1) Open Gemini (or Google Flow) and choose Gemini Omni Flash, vertical 9:16, 15 seconds.\n"
+            "2) Paste this prompt:\n\n" + i["video_prompt"] + "\n\n"
+            f"3) Send the finished video back to this chat (as a File keeps the full quality) with the caption {i['id']}.\n"
+            "The bot adds the Telugu caption and posts it.")
+
+
+def top_up_ideas(state, ig_titles):
+    limit = int(os.getenv("MANUAL_PENDING_MAX", "2"))
+    made = 0
+    while len(state.setdefault("ideas", [])) < limit and made < 3:
+        pend_t = [x["title"] for x in state["ideas"]]
+        pend_m = [x["moral"] for x in state["ideas"]]
+        used_t = [u.get("title", "") for u in state["used"]] + [t.replace("📖", "").strip() for t in ig_titles] + pend_t
+        used_m = [u.get("moral", "") for u in state["used"]] + pend_m
+        idea = omni_concept([t for t in used_t if t], [m_ for m_ in used_m if m_])
+        if not idea:
+            break
+        n = state.get("next_idea_id", 1)
+        state["next_idea_id"] = n + 1
+        idea = {k: idea.get(k) for k in ("title", "caption", "moral", "video_prompt", "tag", "hashtags")} | {"id": n}
+        state["ideas"].append(idea)
+        print(f"New idea #{n}: {idea['title']}\n--- prompt for Gemini/Flow ---\n{idea['video_prompt']}\n------------------------------")
+        publish_idea(idea)
+        save_state_dict(state)
+        tg_say(idea_message(idea))
+        made += 1
+    return made
+
+
+def pick_idea(state, hint):
+    ideas = state.get("ideas", [])
+    m = re.search(r"\d+", hint or "")
+    if m:
+        for i in ideas:
+            if i["id"] == int(m.group()):
+                return i
+    return ideas[0] if ideas else None
+
+
+def tg_fetch_clip(state):
+    """Return (path, caption_hint) for the oldest video you sent to the bot chat, or None."""
+    if not telegram_configured():
+        return None
+    chat = int(os.getenv("TELEGRAM_CHAT_ID").strip())
+    try:
+        res = tg_post("getUpdates", {"offset": state.get("tg_offset", 0), "timeout": 0, "allowed_updates": json.dumps(["message"])})
+    except Exception as e:
+        print("Telegram check failed:", str(e).replace(os.getenv("TELEGRAM_BOT_TOKEN", "x"), "***"))
+        return None
+    for upd in res.get("result", []):
+        state["tg_offset"] = upd["update_id"] + 1  # consume this update
+        msg = upd.get("message") or {}
+        if (msg.get("chat") or {}).get("id") != chat:
+            continue  # only accept videos from your own chat
+        media = msg.get("video") or (msg.get("document") if str((msg.get("document") or {}).get("mime_type", "")).startswith("video/") else None)
+        if not media:
+            continue
+        info = tg_post("getFile", {"file_id": media["file_id"]}).get("result") or {}
+        if not info.get("file_path"):
+            tg_say("I could not download that video (Telegram allows bots up to 20 MB). Please send a smaller file.")
+            continue
+        out = OUT / "manual_raw.mp4"
+        tok = os.getenv("TELEGRAM_BOT_TOKEN").strip()
+        with requests.get(f"https://api.telegram.org/file/bot{tok}/{info['file_path']}", stream=True, timeout=300) as r:
+            r.raise_for_status()
+            with open(out, "wb") as f:
+                for chunk in r.iter_content(1 << 20):
+                    f.write(chunk)
+        return out, msg.get("caption", "")
+    return None
+
+
+def inbox_fetch_clip():
+    files = sorted(p for p in INBOX.glob("*") if p.suffix.lower() in {".mp4", ".mov", ".m4v", ".webm"}) if INBOX.exists() else []
+    return (files[0], files[0].stem) if files else None
+
+
+def generate_manual(state, ig_titles):
+    OUT.mkdir(exist_ok=True)
+    dry = os.getenv("DRY_RUN") == "1"
+    clip = tg_fetch_clip(state)
+    source = "telegram"
+    if not clip:
+        clip, source = inbox_fetch_clip(), "inbox"
+    if clip:
+        raw, hint = clip
+        idea = pick_idea(state, hint)
+        if not idea:
+            tg_say("I received a video but have no waiting idea for it. A new idea will be created soon.")
+            print("Video received but there is no pending idea. Skipping.")
+            if not dry:
+                save_state_dict(state)
+        else:
+            try:
+                now = dt.datetime.now(IST)
+                finish_omni_video(raw, idea["caption"], OUT / "reel.mp4")
+            except Exception as e:
+                print(f"Could not process the video: {str(e)[:400]}")
+                tg_say("I could not process that video file. Please send it again as a File.")
+                if not dry:
+                    save_state_dict(state)
+                return False
+            if not dry:  # a dry run only previews: it keeps your video and idea for the real run
+                if source == "inbox":
+                    try:
+                        os.remove(raw)
+                    except OSError:
+                        pass
+                state["ideas"] = [x for x in state["ideas"] if x["id"] != idea["id"]]
+                finish_idea_files(idea)
+                save_state_dict(state)
+            else:
+                print("DRY RUN: preview built; your video and idea stay queued for the real run.")
+            extra = [t for t in (idea.get("hashtags") or []) if isinstance(t, str) and re.fullmatch(r"#[A-Za-z0-9_]{3,30}", t)]
+            tag = idea.get("tag") if re.fullmatch(r"#[A-Za-z0-9_]{3,30}", str(idea.get("tag", ""))) else "#story"
+            tag_list = []
+            for tg in [tag] + extra[:2] + ["#telugureels", "#teluguanimation", "#moralstories", "#telugu"]:
+                if tg not in tag_list:
+                    tag_list.append(tg)
+            caption = "\n".join([f"📖 {idea['title']}", "", idea["caption"], "", f"నీతి: {idea['moral']}", "",
+                                 "మీకు నచ్చిందా? కామెంట్ చేయండి 👇 ఫాలో అవ్వండి!", "", " ".join(tag_list[:5])])[:2200]
+            name = f"reel-{now.strftime('%Y%m%d-%H%M')}.mp4"
+            (OUT / "meta.json").write_text(json.dumps({"caption": caption, "video_name": name,
+                                                       "story_id": "clip-" + hashlib.md5(idea["title"].encode()).hexdigest()[:8],
+                                                       "title": idea["title"], "moral": idea["moral"]}, ensure_ascii=False))
+            print(f"Video #{idea['id']} captioned and ready ({os.path.getsize(OUT / 'reel.mp4') / 1e6:.1f} MB)")
+            if not dry:
+                tg_say(f"✅ Got your video for idea #{idea['id']}. Adding the Telugu caption and posting it now.")
+            set_output("has_post", "true")
+            set_output("video_name", name)
+            return True
+    else:
+        print("No finished video waiting.")
+    top_up_ideas(state, ig_titles)
+    save_state_dict(state)
+    pend = [f"#{x['id']} {x['title']}" for x in state.get("ideas", [])]
+    print("Ideas waiting for your video:", pend or "none")
+    return False
+
+
 def telegram_configured():
     return bool((os.getenv("TELEGRAM_BOT_TOKEN") or "").strip() and (os.getenv("TELEGRAM_CHAT_ID") or "").strip())
 
@@ -1955,6 +2182,10 @@ def generate():
     OUT.mkdir(exist_ok=True)
     state = load_state()
     ig = recent_ig_titles(ig_user(), ig_token()) if ig_token() else []
+    if manual_wanted():
+        if not generate_manual(state, ig):
+            set_output("has_post", "false")
+        return
     if omni_wanted() and generate_omni(state, ig):
         return
     story = choose_story(state, ig)
