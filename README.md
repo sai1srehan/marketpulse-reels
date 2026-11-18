@@ -1,3 +1,32 @@
+# Pixar-style AI story reels (free)
+
+Every run the AI writes a **brand-new** Telugu kids' story: it invents the characters (looks + voices),
+the dialogue, the moral and 5-6 English shot prompts. Nothing is hard-coded. Then:
+
+1. each shot becomes a Pixar-style keyframe from a **free** image model,
+2. ffmpeg turns each keyframe into a moving shot (slow push-ins, pans),
+3. Telugu voices (free Edge TTS), music and sound effects are mixed in,
+4. the reel is saved to `out/reel.mp4` (and posted if Instagram is set up).
+
+```bash
+python main.py pixar-reel            # make one reel locally (not posted)
+python main.py pixar lion_mouse      # Pixar clips for a built-in story into clips/<id>/
+```
+On GitHub: set the repository **variable** `PIXAR_STORIES` = `1`.
+
+| Part | Free tool used | Key needed? |
+|---|---|---|
+| Story writer | Gemini API free tier (`GEMINI_API_KEY`, best Telugu) → falls back to Pollinations text (no key) | optional |
+| Pixar images | Hugging Face FLUX.1-schnell (`HF_TOKEN`, free monthly credits) → falls back to Pollinations.ai (no key, 1 image / 45 s) | optional |
+| Motion | ffmpeg camera moves | no |
+| Voice | Edge TTS Telugu (ElevenLabs if you add a key) | no |
+
+Keyframes are kept in `out/pixar/<id>/keyframes/`. For real character motion, upload them to a free
+image-to-video tool by hand (Meta AI, Kling / Hailuo / Pika daily free credits, Google Flow) and drop the
+result in as `shotN.mp4`.
+
+---
+
 # Stock News Reel Bot (every 2 hours)
 
 Every 2 hours (08:00 to 22:00 IST) GitHub Actions will:

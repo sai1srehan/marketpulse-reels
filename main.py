@@ -110,7 +110,7 @@ def ease_bounce(k):
 # -------------------------------------------------------------------- state
 def load_state():
     try:
-        st = json.loads(STATE.read_text())
+        st = json.loads(STATE.read_text(encoding="utf-8"))
     except Exception:
         st = {}
     st.setdefault("used", [])
@@ -123,7 +123,7 @@ def save_state(meta):
                        "ts": dt.datetime.now(dt.timezone.utc).isoformat()})
     st["used"] = st["used"][-400:]
     STATE.parent.mkdir(exist_ok=True)
-    STATE.write_text(json.dumps(st, ensure_ascii=False, indent=1))
+    STATE.write_text(json.dumps(st, ensure_ascii=False, indent=1), encoding="utf-8")
 
 
 def recent_ig_titles(user_id, token):
@@ -194,7 +194,15 @@ def gemini_models():
 
 
 def llm_json_text(prompt):
-    """Ask the configured AI (Gemini first if GEMINI_API_KEY is set, otherwise Claude) and return its raw text."""
+    """Ask the configured AI (Gemini first if GEMINI_API_KEY is set, otherwise Claude, otherwise the free
+    no-key Pollinations text API) and return its raw text."""
+    if not gemini_key() and not anthropic_key():
+        r = requests.post("https://text.pollinations.ai/openai", timeout=240,
+                          json={"model": os.getenv("POLLINATIONS_TEXT_MODEL", "openai"), "temperature": 1.0,
+                                "messages": [{"role": "user", "content": prompt}], "response_format": {"type": "json_object"}})
+        r.raise_for_status()
+        print(f"Story written by Pollinations ({r.json().get('model', '?')}, free)")
+        return r.json()["choices"][0]["message"]["content"]
     if gemini_key():
         for model in list(gemini_models()):
             try:
@@ -331,6 +339,106 @@ Return ONLY JSON: {{"title": "Telugu title", "hook": "Telugu teaser (max 10 word
             print(f"AI story attempt {attempt + 1} failed: {e}")
             if attempt < 2:
                 time.sleep(8 * (attempt + 1))  # give a temporary rate limit time to clear
+    return None
+
+
+PIXAR_INSPIRATION = {   # random nudges only; the AI invents the characters, plot and dialogue itself
+    "setting": ["a village pond", "a monsoon rooftop", "a busy Hyderabad street at night", "a mango orchard", "a school garden",
+                "a grandmother's kitchen", "a paddy field at harvest", "a Sankranti kite festival", "a riverside market",
+                "a coconut grove by the sea", "a hilltop temple town", "a toy shop after closing", "a snowy Himalayan village",
+                "a desert caravan in Rajasthan", "a bird sanctuary lake", "a railway station in the rain"],
+    "theme": ["sharing", "honesty", "courage", "patience", "teamwork", "kindness to animals", "gratitude", "saying sorry",
+              "not judging by looks", "helping the elderly", "saving water", "keeping a promise", "trying again after failing",
+              "listening to others", "being yourself", "protecting nature"],
+}
+
+
+def pixar_ai_story(used_titles, used_morals):
+    """The AI invents a complete, original story: characters (with looks and voices), Telugu script and Pixar shot prompts."""
+    setting, theme = random.choice(PIXAR_INSPIRATION["setting"]), random.choice(PIXAR_INSPIRATION["theme"])
+    prompt = f"""You are the writer and director of a Telugu kids' Instagram Reel made as a Pixar-style 3D animated short.
+Invent a COMPLETELY NEW, original story. Invent your own characters (animals, birds, children, or personified everyday objects,
+1 to 3 characters). Inspiration (you may reinterpret): setting near "{setting}", theme around "{theme}".
+Kid-friendly, warm, a little funny or surprising; no violence, nothing scary, no politics or religion, no brands, no
+copyrighted or famous characters, no real people. Do NOT reuse or imitate these titles: {json.dumps(used_titles[-40:], ensure_ascii=False)}
+and avoid these morals: {json.dumps(used_morals[-40:], ensure_ascii=False)}
+
+Script: simple, natural SPOKEN Telugu (everyday words). 6 to 8 lines, each at most 14 words, so the reel stays under 35 seconds.
+Mix a "narrator" with the characters talking. The first line must already be intriguing.
+
+Shots: 5 or 6 shots that together cover every line in order. Each shot has an English image prompt for an AI image model:
+start with the camera framing (close-up / medium / wide / low angle), then ONE clear main subject doing ONE clear action with a
+clear facial expression, then the background and lighting. Image models draw only one or two subjects well, so keep each shot simple.
+Never put any text, letters or signs in the picture.
+LANGUAGE RULE: "title", "hook", "moral", character "name" and line "text" are Telugu. "setting", character "look" and
+shot "prompt" MUST be written in ENGLISH only (the image model cannot read Telugu).
+
+Return ONLY JSON:
+{{"title": "Telugu title", "hook": "Telugu teaser question (max 10 words)", "moral": "one Telugu sentence",
+"scene": "day" | "sunset" | "night",
+"setting": "English description of the world, colours and lighting (one sentence)",
+"characters": [{{"id": "short english id like ammu_duck", "name": "Telugu name", "voice": "male" | "female",
+   "pitch": integer -5..5 (higher = smaller/younger), "look": "English visual description: species, colours, clothes, size, eyes (one sentence)"}}],
+"lines": [{{"who": "narrator" or a character id, "text": "Telugu line"}}],
+"shots": [{{"lines": [line indexes, 0-based], "chars": [character ids visible], "prompt": "English image prompt"}}],
+"tag": "one real English hashtag about the theme, e.g. #kindness", "hashtags": ["#kidsstories", "#moralstory"]}}
+Every shot's "chars" must list the character ids that appear in it (at least one)."""
+    tries = 3 if (gemini_key() or anthropic_key()) else 5   # the free model fails more often
+    for attempt in range(tries):
+        try:
+            raw = json.loads(re.sub(r"^```(?:json)?|```$", "", llm_json_text(prompt).strip(), flags=re.M).strip())
+            chars = raw["characters"]
+            assert 1 <= len(chars) <= 3, "character count"
+            speakers, looks = {}, {}
+            for k, c in enumerate(chars):
+                cid = re.sub(r"[^a-z0-9_]", "", str(c["id"]).lower())[:24] or f"c{k}"
+                assert TELUGU_RE.search(str(c["name"])) and len(str(c["look"])) > 15, "bad character"
+                assert not TELUGU_RE.search(str(c["look"]) + str(raw.get("setting", ""))), "look/setting must be English"
+                hue = (k * 0.33 + random.random() * 0.2) % 1
+                rgb = tuple(int(255 * v) for v in __import__("colorsys").hsv_to_rgb(hue, 0.65, 0.85))
+                speakers[cid] = {"name": str(c["name"]).strip(), "voice": "female" if c.get("voice") == "female" else "male",
+                                 "semi": max(-5, min(5, int(c.get("pitch", 0)))), "rate": 0, "color": rgb}
+                looks[cid] = str(c["look"]).strip()
+                c["id"] = cid
+            lines = []
+            for it in raw["lines"]:
+                who = re.sub(r"[^a-z0-9_]", "", str(it["who"]).lower())
+                who = who if who in speakers else "narrator"
+                text = str(it["text"]).strip()
+                assert TELUGU_RE.search(text) and 1 <= len(text.split()) <= 26, "bad line"
+                lines.append((who, text))
+            assert 5 <= len(lines) <= 10, "line count"
+            assert TELUGU_RE.search(raw["title"]) and TELUGU_RE.search(raw["moral"]), "title/moral not Telugu"
+            shots = []
+            for sh in raw["shots"]:
+                ids = [i for i in sh.get("lines", []) if isinstance(i, int) and 0 <= i < len(lines)]
+                vis = [c for c in sh.get("chars", []) if c in looks] or list(looks)   # never a shot without the story's characters
+                assert len(str(sh.get("prompt", ""))) > 20, "shot prompt too short"
+                assert not TELUGU_RE.search(str(sh["prompt"])), "shot prompt must be English"
+                # name the exact characters and forbid extras, or the image model invents people that are not in the story
+                shots.append({"lines": ids, "scene": f"{sh['prompt']} The ONLY characters in the picture: "
+                              f"{' AND '.join(looks[c] for c in vis)}. No other people or animals. Setting: {raw.get('setting', '')}"})
+            assert 3 <= len(shots) <= 8, "shot count"
+            if any(_sim(raw["title"], t) > 0.5 for t in used_titles) or any(_sim(raw["moral"], m_) > 0.5 for m_ in used_morals if m_):
+                raise ValueError("too similar to an earlier story")
+            placeholder = {"#englishtag", "#tag", "#hashtag"}   # free models sometimes copy the example literally
+            extra = [t for t in (raw.get("hashtags") or []) if isinstance(t, str) and re.fullmatch(r"#[A-Za-z0-9_]{3,30}", t)
+                     and t.lower() not in placeholder]
+            if str(raw.get("tag", "")).lower() in placeholder:
+                raw["tag"] = ""
+            hook = str(raw.get("hook", "")).strip()
+            story = {"id": "px-" + hashlib.md5(raw["title"].encode()).hexdigest()[:8], "title": raw["title"].strip(),
+                     "scene": raw.get("scene") if raw.get("scene") in ("day", "sunset", "night") else "day",
+                     "hook": hook if TELUGU_RE.search(hook) and len(hook.split()) <= 14 else "",
+                     "cast": list(speakers), "speakers": speakers, "looks": " ".join(looks.values()), "shots": shots,
+                     "lines": lines, "moral": raw["moral"].strip(), "hashtags": extra,
+                     "tag": raw["tag"] if re.fullmatch(r"#[A-Za-z0-9_]{3,30}", str(raw.get("tag", ""))) else "#story"}
+            print(f"AI Pixar story: {story['title']} | " + " | ".join(f"{k}: {v}" for k, v in looks.items())[:400])
+            return story
+        except Exception as e:
+            print(f"AI Pixar story attempt {attempt + 1} failed: {e}")
+            if attempt < tries - 1:
+                time.sleep(8 * (attempt + 1))
     return None
 
 
@@ -1588,6 +1696,150 @@ def write_prompts():
     print(f"Wrote prompts/*.md for {len(STORIES)} stories")
 
 
+# ------------------------------------------- free Pixar-style clip maker (no paid API, no GPU needed)
+# 1) one Pixar-style keyframe per shot from a free image model (Pollinations.ai, or Hugging Face FLUX if HF_TOKEN is set)
+# 2) each keyframe becomes a moving shot with a smooth virtual-camera move (ffmpeg zoompan)
+# 3) saved as clips/<story id>/shotN.mp4, which the cinematic clip mode above already knows how to use
+PIXAR_STILL = ("Pixar-style 3D animated movie still, rounded 3D CGI render (not anime, not 2D), cute cartoon characters with "
+               "big glossy expressive eyes, any people are wholesome kids in modest fully clothed kid-friendly outfits, "
+               "warm cinematic lighting, vibrant colours, soft depth of field, no text, no watermark")
+SPECIES_EN = {
+    "boy": "RAMU: a cheerful 8-year-old Indian boy with black hair, blue t-shirt and brown shorts.",
+    "snake": "SNAKE: a friendly bright-green cartoon snake with big kind eyes.",
+    "lion": "LION: a big golden cartoon lion with a thick brown mane.",
+    "mouse": "MOUSE: a tiny grey cartoon mouse with big round ears and shiny eyes.",
+    "rabbit": "RABBIT: a fluffy white cartoon rabbit with long pink-inside ears.",
+    "tortoise": "TORTOISE: a kind green cartoon tortoise with a dome shell and gentle eyes.",
+    "crow": "CROW: a glossy black cartoon crow with a bright orange beak.",
+    "fox": "FOX: a clever orange cartoon fox with white cheeks and a bushy tail.",
+}
+SCENE_EN = {"day": "a sunny afternoon in a lush green Indian forest clearing",
+            "sunset": "golden sunset light at the edge of an Indian village forest",
+            "night": "a magical moonlit night in an Indian forest with glowing fireflies"}
+CAMERA_MOVES = ["in", "pan_r", "out", "pan_l", "up"]
+
+
+def pixar_shots(story):
+    """English scene prompts per shot. AI Pixar stories bring their own; hand-written ones use SHOTS;
+    older AI stories get shots built from cast + emotions."""
+    if story.get("shots"):
+        return [sh["scene"] for sh in story["shots"]], ""   # looks are already inside each shot prompt
+    if SHOTS.get(story["id"]):
+        return [sh["scene"] for sh in SHOTS[story["id"]]], CHARACTER_LOOKS.get(story["id"], "")
+    looks = " ".join(SPECIES_EN.get(CAST[c]["species"], "") for c in story["cast"])
+    names = [CAST[c]["species"] for c in story["cast"]]
+    place = SCENE_EN.get(story.get("scene"), SCENE_EN["day"])
+    emos = story.get("emotions") or []
+    framing = ["Wide establishing shot", "Medium shot", "Close-up", "Medium two-shot", "Low-angle shot"]
+    scenes = []
+    for k, i in enumerate(range(0, len(story["lines"]), 2)):
+        who = next((w for w, _ in story["lines"][i:i + 2] if w != "narrator"), None)
+        emo = emos[i] if i < len(emos) else "happy"
+        if who:
+            focus = f"the {CAST[who]['species']} looks {emo} and talks to the {next((n for n in names if n != CAST[who]['species']), names[0])}"
+        else:
+            focus = f"the {' and the '.join(names)} together, feeling {emo}"
+        scenes.append(f"{framing[k % len(framing)]} in {place}: {focus}.")
+    return scenes, looks
+
+
+def free_image(prompt, seed, path):
+    """Pixar-style keyframe from a free model. Returns the provider name."""
+    hf = (os.getenv("HF_TOKEN") or "").strip()
+    if hf:
+        try:
+            r = requests.post(f"https://router.huggingface.co/hf-inference/models/{os.getenv('HF_IMAGE_MODEL', 'black-forest-labs/FLUX.1-schnell')}",
+                              headers={"Authorization": f"Bearer {hf}"},
+                              json={"inputs": prompt, "parameters": {"width": 768, "height": 1344, "seed": seed}}, timeout=180)
+            if r.ok and r.headers.get("content-type", "").startswith("image/"):
+                path.write_bytes(r.content)
+                return "huggingface"
+            print(f"  Hugging Face failed ({r.status_code}): {r.text[:200]}; trying Pollinations")
+        except Exception as e:
+            print(f"  Hugging Face failed: {e}; trying Pollinations")
+    from urllib.parse import quote
+    global _POLL_LAST
+    url = "https://image.pollinations.ai/prompt/" + quote(prompt[:1500], safe="")
+    params = {"width": 1080, "height": 1920, "seed": seed, "model": os.getenv("POLLINATIONS_MODEL", "flux"), "nologo": "true"}
+    gap = float(os.getenv("POLLINATIONS_GAP", "47"))   # free tier: 1 image per 45 s per IP
+    last = ""
+    for attempt in range(5):
+        wait = _POLL_LAST + gap - time.time()
+        if wait > 0:
+            print(f"  waiting {wait:.0f}s for the free image tier")
+            time.sleep(wait)
+        try:
+            _POLL_LAST = time.time()
+            r = requests.get(url, params=params, headers={"User-Agent": "telugu-story-reel-bot"}, timeout=180)
+            if r.ok and r.headers.get("content-type", "").startswith("image/"):
+                img = Image.open(__import__("io").BytesIO(r.content)).convert("RGB")
+                img = img.crop((0, 0, img.width, int(img.height * 0.94)))   # trim the free-tier watermark strip
+                img.save(path)
+                return "pollinations"
+            last = f"{r.status_code} {r.text[:150]}"
+            print(f"  image attempt {attempt + 1} failed: {last}")
+        except Exception as e:
+            last = str(e)
+            print(f"  image attempt {attempt + 1} failed: {last}")
+    raise RuntimeError(f"free image generation failed: {last}")
+
+
+_POLL_LAST = 0.0
+
+
+def cover_fit(path):
+    img = Image.open(path).convert("RGB")
+    s = max(W / img.width, H / img.height)
+    img = img.resize((math.ceil(img.width * s), math.ceil(img.height * s)), Image.LANCZOS)
+    l, t = (img.width - W) // 2, (img.height - H) // 2
+    img.crop((l, t, l + W, t + H)).save(path)
+
+
+def still_to_clip(img_path, out_path, seconds, move):
+    """Smooth eased camera move over a still (2x upscale first so zoompan does not jitter)."""
+    n = int(seconds * FPS)
+    e = f"((1-cos(PI*on/{n}))/2)"
+    z = {"in": f"1+0.16*{e}", "out": f"1.16-0.16*{e}"}.get(move, "1.12")
+    x = {"pan_r": f"(iw-iw/zoom)*{e}", "pan_l": f"(iw-iw/zoom)*(1-{e})"}.get(move, "(iw-iw/zoom)/2")
+    y = f"(ih-ih/zoom)*(1-{e})" if move == "up" else "(ih-ih/zoom)/2"
+    vf = f"scale={W * 2}:{H * 2},zoompan=z='{z}':x='{x}':y='{y}':d={n}:s={W}x{H}:fps={FPS},format=yuv420p"
+    run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(img_path), "-vf", vf, "-frames:v", str(n),
+         "-c:v", "libx264", "-preset", "veryfast", "-crf", "19", str(out_path)])
+
+
+def make_pixar_clips(story, force=False):
+    """Fills clips/<story id>/ with Pixar-style shots. Keyframes are kept in keyframes/ so you can also
+    feed them to a free image-to-video tool by hand and drop the result in as shotN.mp4."""
+    d = (OUT / "pixar" if story["id"].startswith("px-") else CLIPS_DIR) / story["id"]   # one-off AI stories stay out of the repo
+    kf = d / "keyframes"
+    kf.mkdir(parents=True, exist_ok=True)
+    scenes, looks = pixar_shots(story)
+    seed = int(hashlib.md5(story["id"].encode()).hexdigest()[:6], 16)   # same seed per story = more consistent look
+    secs = float(os.getenv("PIXAR_CLIP_SECONDS", "10"))
+    made = []
+    for i, scene in enumerate(scenes, 1):
+        clip, still = d / f"shot{i}.mp4", kf / f"shot{i}.png"
+        if clip.exists() and not force:
+            made.append(clip)
+            continue
+        try:
+            if force or not still.exists():
+                # scene first: image models weight the start of the prompt most, so the action must lead
+                prov = free_image(f"{scene} {looks} {PIXAR_STILL}.", seed + i, still)
+                cover_fit(still)
+                print(f"  shot {i}/{len(scenes)} keyframe via {prov}")
+            still_to_clip(still, clip, secs, CAMERA_MOVES[(i - 1) % len(CAMERA_MOVES)])
+            made.append(clip)
+        except Exception as e:
+            print(f"  shot {i} failed: {str(e)[:300]}")
+            if len(made) < 2:
+                raise
+            print(f"  continuing with the {len(made)} shots already made")
+            break
+    print(f"Pixar clips ready in {d}/ ({len(made)} of {len(scenes)} shots)")
+    return made
+
+
 class FrameReader:
     """Decodes a clip to 1080x1920 frames; holds the last frame if the voice runs longer than the clip."""
 
@@ -1613,7 +1865,7 @@ class FrameReader:
 
 
 def shot_of_line(story, line_idx, n_clips):
-    for k, sh in enumerate(SHOTS.get(story["id"], [])):
+    for k, sh in enumerate(story.get("shots") or SHOTS.get(story["id"], [])):
         if line_idx in sh["lines"]:
             return k % n_clips
     return min(n_clips - 1, line_idx * n_clips // max(1, len(story["lines"])))
@@ -1722,7 +1974,7 @@ def record_omni():
     st.setdefault("omni", []).append(dt.datetime.now(dt.timezone.utc).isoformat())
     st["omni"] = st["omni"][-200:]
     STATE.parent.mkdir(exist_ok=True)
-    STATE.write_text(json.dumps(st, ensure_ascii=False, indent=1))
+    STATE.write_text(json.dumps(st, ensure_ascii=False, indent=1), encoding="utf-8")
 
 
 def omni_concept(used_titles, used_morals):
@@ -1922,7 +2174,7 @@ def generate_omni(state, ig_titles):
     name = f"reel-{now.strftime('%Y%m%d-%H%M')}.mp4"
     (OUT / "meta.json").write_text(json.dumps({"caption": caption, "video_name": name,
                                                "story_id": "omni-" + hashlib.md5(idea["title"].encode()).hexdigest()[:8],
-                                               "title": idea["title"], "moral": idea["moral"]}, ensure_ascii=False))
+                                               "title": idea["title"], "moral": idea["moral"]}, ensure_ascii=False), encoding="utf-8")
     print(f"Built out/reel.mp4 with Gemini Omni ({os.path.getsize(OUT / 'reel.mp4') / 1e6:.1f} MB)")
     telegram_send(OUT / "reel.mp4", idea["title"], caption)
     set_output("has_post", "true")
@@ -1940,7 +2192,7 @@ def manual_wanted():
 
 def save_state_dict(st):
     STATE.parent.mkdir(exist_ok=True)
-    STATE.write_text(json.dumps(st, ensure_ascii=False, indent=1))
+    STATE.write_text(json.dumps(st, ensure_ascii=False, indent=1), encoding="utf-8")
 
 
 def tg_post(method, params=None, timeout=60):
@@ -2141,7 +2393,7 @@ def generate_manual(state, ig_titles):
             name = f"reel-{now.strftime('%Y%m%d-%H%M')}.mp4"
             (OUT / "meta.json").write_text(json.dumps({"caption": caption, "video_name": name,
                                                        "story_id": "clip-" + hashlib.md5(idea["title"].encode()).hexdigest()[:8],
-                                                       "title": idea["title"], "moral": idea["moral"]}, ensure_ascii=False))
+                                                       "title": idea["title"], "moral": idea["moral"]}, ensure_ascii=False), encoding="utf-8")
             print(f"Video #{idea['id']} captioned and ready ({os.path.getsize(OUT / 'reel.mp4') / 1e6:.1f} MB)")
             if not dry:
                 tg_say(f"✅ Got your video for idea #{idea['id']}. Adding the Telugu caption and posting it now.")
@@ -2194,7 +2446,17 @@ def generate():
         return
     if omni_wanted() and generate_omni(state, ig):
         return
-    story = choose_story(state, ig)
+    story = None
+    if os.getenv("PIXAR_STORIES") == "1":   # AI writes a brand-new story + Pixar shots every run (nothing hard-coded)
+        used_titles = [u.get("title", "") for u in state["used"]] + [x["title"] for x in STORIES] + [t.replace("📖", "").strip() for t in ig]
+        used_morals = [u.get("moral", "") for u in state["used"]] + [x["moral"] for x in STORIES]
+        try:
+            story = pixar_ai_story([t for t in used_titles if t], [m_ for m_ in used_morals if m_])
+        except Exception as e:
+            print(f"AI Pixar story failed: {e}")
+        if not story:
+            print("AI Pixar story unavailable: falling back to the normal story picker.")
+    story = story or choose_story(state, ig)
     found = {st["id"]: len(story_clips(st["id"])) for st in STORIES}
     print("Clip files found per story:", json.dumps(found))
     if not story:
@@ -2216,7 +2478,8 @@ def generate():
     segments = [{"kind": "intro", "who": "narrator", "spk": NARRATOR, "text": hook_text}]
     drop_idx = None
     for i, (who, text) in enumerate(story["lines"]):
-        segments.append({"kind": "line", "li": i, "who": who, "spk": NARRATOR if who == "narrator" else CAST[who], "text": text})
+        segments.append({"kind": "line", "li": i, "who": who, "text": text,
+                         "spk": NARRATOR if who == "narrator" else (story.get("speakers") or CAST)[who]})
         if story.get("drop_line") == i:
             drop_idx = len(segments) - 1
     segments.append({"kind": "moral", "who": "narrator", "spk": NARRATOR, "text": f"నీతి: {story['moral']}"})
@@ -2233,6 +2496,16 @@ def generate():
     audio = OUT / "audio.wav"
     mix_audio(voice, music, sfx, audio)
     clips = story_clips(story["id"])
+    if not clips and (os.getenv("PIXAR_CLIPS") == "1" or story.get("shots")):
+        try:
+            clips = make_pixar_clips(story)
+        except Exception as e:
+            print(f"Pixar clips failed ({str(e)[:300]}); using the built-in cartoon engine.")
+            clips = []
+    if not clips and story.get("speakers"):
+        print("No Pixar shots could be made for this AI story (the cartoon engine cannot draw its new characters). Skipping this run.")
+        set_output("has_post", "false")
+        return
     if clips:
         print(f"Cinematic clip mode: {len(clips)} clips")
         render_clip_video(story, segments, starts, durs, total, audio, OUT / "reel.mp4", clips)
@@ -2248,7 +2521,7 @@ def generate():
                          "ఈ రీల్ మీ స్నేహితుడికి పంపండి 💌", "మీకు ఏ పాత్ర బాగా నచ్చింది? కామెంట్‌లో చెప్పండి 👇", "", tags])[:2200]
     name = f"reel-{now.strftime('%Y%m%d-%H%M')}.mp4"
     (OUT / "meta.json").write_text(json.dumps({"caption": caption, "video_name": name, "story_id": story["id"],
-                                               "title": story["title"], "moral": story["moral"]}, ensure_ascii=False))
+                                               "title": story["title"], "moral": story["moral"]}, ensure_ascii=False), encoding="utf-8")
     print(f"Built out/reel.mp4 ({os.path.getsize(OUT / 'reel.mp4') / 1e6:.1f} MB, {total:.0f}s)")
     telegram_send(OUT / "reel.mp4", story["title"], caption)
     set_output("has_post", "true")
@@ -2306,7 +2579,7 @@ def publish():
     if not meta_path.exists():
         print("Nothing to publish.")
         return
-    meta = json.loads(meta_path.read_text())
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
     if os.getenv("DRY_RUN") == "1":
         print("DRY_RUN=1 -> not publishing.\n\n" + meta["caption"])
         return
@@ -2351,6 +2624,17 @@ if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else "all"
     if cmd == "prompts":
         write_prompts()
+        sys.exit(0)
+    if cmd == "pixar-reel":   # AI writes a new story and it becomes a Pixar-style reel in out/reel.mp4 (not posted)
+        os.environ["PIXAR_STORIES"] = "1"
+        generate()
+        sys.exit(0)
+    if cmd == "pixar":   # python main.py pixar [story_id|all] [--force]
+        want = sys.argv[2] if len(sys.argv) > 2 and not sys.argv[2].startswith("-") else "all"
+        for st in STORIES:
+            if want in ("all", st["id"]):
+                print(f"Making Pixar clips for {st['id']}")
+                make_pixar_clips(st, force="--force" in sys.argv)
         sys.exit(0)
     if cmd in ("generate", "all"):
         generate()

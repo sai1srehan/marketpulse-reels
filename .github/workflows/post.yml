@@ -57,6 +57,10 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           AI_STORIES: ${{ vars.AI_STORIES }}
           REQUIRE_CLIPS: ${{ vars.REQUIRE_CLIPS || '0' }}
+          PIXAR_STORIES: ${{ vars.PIXAR_STORIES || '0' }}
+          PIXAR_CLIPS: ${{ vars.PIXAR_CLIPS || '0' }}
+          PIXAR_CLIP_SECONDS: ${{ vars.PIXAR_CLIP_SECONDS || '10' }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
           COOLDOWN_DAYS: ${{ vars.COOLDOWN_DAYS || '30' }}
           SHOW_SUBTITLES: ${{ vars.SHOW_SUBTITLES || '0' }}
           SHOW_PROGRESS: ${{ vars.SHOW_PROGRESS || '0' }}
