@@ -1,4 +1,22 @@
-# Pixar-style AI story reels (free)
+# Free animated shorts (default when `PIXAR_STORIES=1`)
+
+15-second Pixar-style animated reels with real character motion, a Telugu caption on top and music, made for free:
+
+1. the AI invents one original micro-story (Telugu caption + English image/motion prompts),
+2. a free image model draws one opening keyframe with all characters,
+3. the free **Wan 2.2** image-to-video model (Hugging Face ZeroGPU Spaces) animates 3 beats of 5 s.
+   Each beat starts from the last frame of the previous one, so the characters stay identical,
+4. music, caption and posting.
+
+```bash
+python main.py short     # make one locally into out/reel.mp4 (not posted)
+```
+- Add a free Hugging Face token as the secret `HF_TOKEN` (more free GPU time per day; anonymous quota from GitHub's shared IPs is small).
+- If the free GPU quota is used up, the run is skipped (nothing posted) and the next run tries again.
+  Set `SHORT_REQUIRE_MOTION=0` to post with camera moves instead.
+- `PIXAR_FORMAT=story` switches to the older ~35 s narrated story over Pixar stills (below).
+
+# Pixar-style AI story reels (`PIXAR_FORMAT=story`)
 
 Every run the AI writes a **brand-new** Telugu kids' story: it invents the characters (looks + voices),
 the dialogue, the moral and 5-6 English shot prompts. Nothing is hard-coded. Then:

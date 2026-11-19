@@ -2175,6 +2175,12 @@ def generate_omni(state, ig_titles):
     except Exception as e:
         print(f"Omni video failed: {str(e)[:500]}")
         return False
+    return post_idea(idea, "omni-", "Gemini Omni")
+
+
+def post_idea(idea, id_prefix, engine):
+    """Caption, hashtags and meta.json for a finished out/reel.mp4 made from an idea dict (Omni or animated short)."""
+    now = dt.datetime.now(IST)
     tag_list = []
     extra = [t for t in (idea.get("hashtags") or []) if isinstance(t, str) and re.fullmatch(r"#[A-Za-z0-9_]{3,30}", t)]
     tag = idea.get("tag") if re.fullmatch(r"#[A-Za-z0-9_]{3,30}", str(idea.get("tag", ""))) else "#story"
@@ -2185,13 +2191,182 @@ def generate_omni(state, ig_titles):
                          "ఈ రీల్ మీ స్నేహితుడికి పంపండి 💌", (idea.get("question") or "మీకు నచ్చిందా? కామెంట్‌లో చెప్పండి 👇") + " 👇", "", " ".join(tag_list[:5])])[:2200]
     name = f"reel-{now.strftime('%Y%m%d-%H%M')}.mp4"
     (OUT / "meta.json").write_text(json.dumps({"caption": caption, "video_name": name,
-                                               "story_id": "omni-" + hashlib.md5(idea["title"].encode()).hexdigest()[:8],
+                                               "story_id": id_prefix + hashlib.md5(idea["title"].encode()).hexdigest()[:8],
                                                "title": idea["title"], "moral": idea["moral"]}, ensure_ascii=False), encoding="utf-8")
-    print(f"Built out/reel.mp4 with Gemini Omni ({os.path.getsize(OUT / 'reel.mp4') / 1e6:.1f} MB)")
+    print(f"Built out/reel.mp4 with {engine} ({os.path.getsize(OUT / 'reel.mp4') / 1e6:.1f} MB)")
     telegram_send(OUT / "reel.mp4", idea["title"], caption)
     set_output("has_post", "true")
     set_output("video_name", name)
     return True
+
+
+# ------------------------------- free animated shorts: Wan 2.2 image-to-video on free Hugging Face ZeroGPU Spaces
+# One opening keyframe -> beat 1 animated from it -> beat 2 animated from the LAST frame of beat 1 -> beat 3 ...
+# so the whole reel is one continuous scene with the same characters (like the reference reels).
+VIDEO_SPACES = [s.strip() for s in os.getenv("VIDEO_SPACES", "zerogpu-aoti/wan2-2-fp8da-aoti-faster,"
+                                             "r3gm/wan2-2-fp8da-aoti-preview").split(",") if s.strip()]
+VIDEO_NEG = "static, frozen, blurry, distorted, deformed face, extra limbs, text, subtitles, watermark, logo, flicker"
+
+
+class QuotaError(RuntimeError):
+    pass
+
+
+def animate_still(img, motion, out, seconds, seed):
+    """Free image-to-video. Returns the Space used. Raises QuotaError when the free daily GPU quota is used up."""
+    import shutil
+    from gradio_client import Client, handle_file
+    tok = (os.getenv("HF_TOKEN") or "").strip() or None
+    last = ""
+    for space in VIDEO_SPACES:
+        try:
+            c = Client(space, token=tok, verbose=False)
+            res = c.predict(input_image=handle_file(str(img)), prompt=motion, negative_prompt=VIDEO_NEG, steps=6,
+                            duration_seconds=seconds, seed=seed, randomize_seed=False, api_name="/generate_video")
+            vid = res[0] if isinstance(res, (list, tuple)) else res
+            if isinstance(vid, dict):
+                vid = vid.get("video") or vid.get("path")
+            shutil.copy(vid, out)
+            return space
+        except Exception as e:
+            msg = str(e)
+            last = f"{space}: {msg[:300]}"
+            print(f"  video model failed - {last}")
+            if "quota" in msg.lower():   # the free quota is per account/IP across all ZeroGPU Spaces
+                raise QuotaError(msg[:300])
+    raise RuntimeError(last)
+
+
+def last_frame(clip, png):
+    run(["ffmpeg", "-y", "-loglevel", "error", "-sseof", "-0.2", "-i", str(clip), "-update", "1", "-frames:v", "1", str(png)])
+
+
+def media_seconds(path):
+    p = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(path)],
+                       capture_output=True, text=True)
+    return float(p.stdout.strip() or 0)
+
+
+def short_concept(used_titles, used_morals):
+    """AI invents one original 15-second animated micro-story (Telugu caption + English image/motion prompts)."""
+    setting, theme = random.choice(PIXAR_INSPIRATION["setting"]), random.choice(PIXAR_INSPIRATION["theme"])
+    prompt = f"""You are the creative director of a Telugu Instagram Reels page that posts short, heart-touching or funny animated films.
+Invent ONE original 15-second Pixar-style 3D animated micro-story with a clear, positive, shareable message.
+Cast: one or two cute, expressive personified characters (animals, birds, everyday objects, fruits, vegetables, toys...).
+Inspiration (you may reinterpret): setting near "{setting}", theme around "{theme}". Warm cinematic look.
+Rules: kid-friendly; no violence; no politics or religion; no real people; no brands; no famous or copyrighted characters.
+Do NOT reuse or imitate these titles: {json.dumps(used_titles[-40:], ensure_ascii=False)}
+and avoid these morals: {json.dumps(used_morals[-40:], ensure_ascii=False)}
+
+HOW IT IS MADE: one opening image, then 3 beats of 5 seconds. Each beat is animated from the LAST frame of the previous
+beat, so it is ONE continuous scene: same place, same characters, roughly the same camera. Each beat describes motion only:
+what the characters do, their facial expressions, and small effects (sparkles, wind, splash, glow). Keep the characters in frame.
+Beat 1 must already be surprising or emotional (no slow intro). Beat 3 is the warm or funny payoff.
+The Telugu "caption" is shown on screen at the top: something people want to send to a friend.
+
+Return ONLY JSON:
+{{"title": "short Telugu title",
+"caption": "Telugu on-screen message (max 18 words, 1 or 2 emotional sentences, simple spoken Telugu)",
+"moral": "one Telugu sentence", "question": "one short Telugu question that invites a real comment",
+"characters": ["English look of each character: species/object, colours, size, big expressive eyes (one sentence each)"],
+"opening_image": "English image prompt: medium shot showing ALL characters together and fully visible, their pose and expression, the setting and lighting",
+"beats": ["English motion prompt for 0-5 s", "for 5-10 s", "for 10-15 s"],
+"tag": "one real English hashtag about the theme, e.g. #friendship", "hashtags": ["#kidsstories", "#moralstory"]}}
+LANGUAGE RULE: title, caption, moral and question are Telugu; characters, opening_image and beats are ENGLISH only."""
+    tries = 3 if (gemini_key() or anthropic_key()) else 5
+    for attempt in range(tries):
+        try:
+            raw = json.loads(re.sub(r"^```(?:json)?|```$", "", llm_json_text(prompt).strip(), flags=re.M).strip())
+            assert all(TELUGU_RE.search(str(raw.get(k, ""))) for k in ("title", "caption", "moral")), "Telugu fields missing"
+            chars = [str(c).strip() for c in raw.get("characters", []) if len(str(c).strip()) > 10][:2]
+            beats = [str(b).strip() for b in raw.get("beats", []) if len(str(b).strip()) > 15]
+            assert chars and len(beats) >= 3, "characters/beats missing"
+            assert len(str(raw.get("opening_image", ""))) > 30, "opening image prompt too short"
+            assert not TELUGU_RE.search(" ".join(chars + beats) + str(raw["opening_image"])), "prompts must be English"
+            if any(_sim(raw["title"], t) > 0.5 for t in used_titles) or any(_sim(raw["moral"], m_) > 0.5 for m_ in used_morals if m_):
+                raise ValueError("too similar to an earlier video")
+            raw["characters"], raw["beats"] = chars, beats[:3]
+            if str(raw.get("tag", "")).lower() in {"#englishtag", "#tag", "#hashtag"}:
+                raw["tag"] = ""
+            return raw
+        except Exception as e:
+            print(f"Short concept attempt {attempt + 1} failed: {e}")
+            if attempt < tries - 1:
+                time.sleep(8 * (attempt + 1))
+    return None
+
+
+def generate_pixar_short(state, ig_titles):
+    """Returns True if out/reel.mp4 is ready to post. Never raises."""
+    try:
+        used_titles = [u.get("title", "") for u in state["used"]] + [t.replace("📖", "").strip() for t in ig_titles]
+        used_morals = [u.get("moral", "") for u in state["used"]]
+        idea = short_concept([t for t in used_titles if t], [m_ for m_ in used_morals if m_])
+        if not idea:
+            return False
+        print(f"Short idea: {idea['title']} | {' | '.join(idea['characters'])[:300]}")
+        d = OUT / "short"
+        d.mkdir(parents=True, exist_ok=True)
+        for old in d.glob("*"):
+            old.unlink()
+        seed = random.randint(1, 10 ** 6)
+        looks = " AND ".join(idea["characters"])
+        key = d / "key.png"
+        prov = free_image(f"{idea['opening_image']} The ONLY characters in the picture: {looks}. "
+                          f"No other people or animals. {PIXAR_STILL}.", seed, key)
+        cover_fit(key)
+        print(f"  opening keyframe via {prov}")
+        secs = float(os.getenv("SHORT_BEAT_SECONDS", "5"))
+        clips, src, animated, quota_out = [], key, 0, False
+        for i, beat in enumerate(idea["beats"]):
+            clip = d / f"beat{i + 1}.mp4"
+            if not quota_out:
+                try:
+                    space = animate_still(src, f"{beat} The characters look exactly the same: {looks}. "
+                                               "Pixar-style 3D animation, smooth natural motion.", clip, secs, seed + i)
+                    animated += 1
+                    print(f"  beat {i + 1}/{len(idea['beats'])} animated via {space}")
+                except QuotaError as e:
+                    quota_out = True
+                    print(f"  free GPU quota used up: {e}")
+                except Exception as e:
+                    print(f"  beat {i + 1} animation failed: {str(e)[:300]}")
+            if not clip.exists():
+                if animated == 0 and os.getenv("SHORT_REQUIRE_MOTION", "1") == "1":
+                    print("No beat could be animated (free quota or Space down). Skipping this run; the next run will try again.")
+                    return False
+                still_to_clip(src, clip, secs, CAMERA_MOVES[i % len(CAMERA_MOVES)])   # keep the reel watchable
+                print(f"  beat {i + 1} uses a camera move instead")
+            clips.append(clip)
+            nxt = d / f"last{i + 1}.png"
+            last_frame(clip, nxt)
+            src = nxt
+        # join the beats at full 1080x1920
+        joined = d / "joined.mp4"
+        cmd = ["ffmpeg", "-y", "-loglevel", "error"]
+        for c in clips:
+            cmd += ["-i", str(c)]
+        fc = "".join(f"[{i}:v]scale={W}:{H}:force_original_aspect_ratio=increase:flags=lanczos,crop={W}:{H},fps={FPS},"
+                     f"setsar=1,format=yuv420p[v{i}];" for i in range(len(clips)))
+        fc += "".join(f"[v{i}]" for i in range(len(clips))) + f"concat=n={len(clips)}:v=1:a=0[v]"
+        run(cmd + ["-filter_complex", fc, "-map", "[v]", "-c:v", "libx264", "-preset", "veryfast", "-crf", "18", str(joined)])
+        # music + a little sparkle, no narration (like the reference reels)
+        dur = media_seconds(joined)
+        rng = random.Random(seed)
+        n = int(dur * SR)
+        music = get_music(dur, rng) * 2.4
+        sfx = make_sfx([(0.05, "pop"), (max(0.1, dur - secs), "whoosh")], n, rng)
+        wav = d / "audio.wav"
+        mix_audio(np.zeros(n, np.float32), music, sfx, wav)
+        raw = d / "raw.mp4"
+        run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(joined), "-i", str(wav), "-map", "0:v", "-map", "1:a",
+             "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-shortest", str(raw)])
+        finish_omni_video(raw, idea["caption"], OUT / "reel.mp4")   # Telugu caption on top + Instagram encode
+        print(f"Animated beats: {animated} of {len(clips)}")
+    except Exception as e:
+        print(f"Animated short failed: {str(e)[:500]}")
+        return False
+    return post_idea(idea, "short-", f"free animated short ({animated}/{len(clips)} beats animated)")
 
 
 # -------------------------------- manual mode: you make the clip with your own Gemini plan, the bot does the rest
@@ -2462,8 +2637,14 @@ def generate():
         return
     if omni_wanted() and generate_omni(state, ig):
         return
+    if os.getenv("PIXAR_STORIES") == "1" and os.getenv("PIXAR_FORMAT", "short") == "short":
+        # 15 s animated short (free Wan 2.2 video model), like the reference reels
+        if not generate_pixar_short(state, ig):
+            print("Animated short not made this run; nothing posted. The next scheduled run will try again.")
+            set_output("has_post", "false")
+        return
     story = None
-    if os.getenv("PIXAR_STORIES") == "1":   # AI writes a brand-new story + Pixar shots every run (nothing hard-coded)
+    if os.getenv("PIXAR_STORIES") == "1":   # PIXAR_FORMAT=story: longer narrated story over Pixar stills
         used_titles = [u.get("title", "") for u in state["used"]] + [x["title"] for x in STORIES] + [t.replace("📖", "").strip() for t in ig]
         used_morals = [u.get("moral", "") for u in state["used"]] + [x["moral"] for x in STORIES]
         try:
@@ -2643,8 +2824,12 @@ if __name__ == "__main__":
     if cmd == "prompts":
         write_prompts()
         sys.exit(0)
-    if cmd == "pixar-reel":   # AI writes a new story and it becomes a Pixar-style reel in out/reel.mp4 (not posted)
+    if cmd in ("pixar-reel", "short"):   # AI writes a new idea and it becomes a reel in out/reel.mp4 (not posted)
         os.environ["PIXAR_STORIES"] = "1"
+        if cmd == "short":
+            os.environ["PIXAR_FORMAT"] = "short"
+        else:
+            os.environ.setdefault("PIXAR_FORMAT", "story")
         generate()
         sys.exit(0)
     if cmd == "pixar":   # python main.py pixar [story_id|all] [--force]
