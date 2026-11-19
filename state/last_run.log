@@ -1,34 +1,13 @@
-run at 2026-11-19T06:49:10.463482+00:00 event=workflow_dispatch
+run at 2026-11-19T07:03:29.738233+00:00 event=workflow_dispatch
 MODE: PIXAR_STORIES=1 MANUAL_VIDEOS=0 OMNI_VIDEOS=0 | story AI: Gemini | images: Hugging Face
 Gemini gemini-3.8-flash error: HTTPSConnectionPool(host='generativelanguage.googleapis.com', port=443): Read timed out. (read timeout=180)
-Gemini gemini-3.7-flash failed: 429 {
-  "error": {
-    "code": 429,
-    "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://aistudio.google.com/do
-Gemini gemini-3.6-flash busy (503), retrying
-Gemini gemini-3.6-flash busy (503), retrying
-Gemini gemini-3.6-flash failed: 429 {
-  "error": {
-    "code": 429,
-    "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://aistudio.google.com/do
-Gemini model gemini-2.5-flash not available, trying the next one
-All Gemini models failed; using the free Pollinations text model instead.
-Story written by Pollinations (gpt-oss-20b, free)
-Short idea: కోకొనట్ పిట్ట మనశ్శాసం | Pink feathered rabbit, bright emerald eyes, big floppy ears | Orange coconut fruit, glossy surface, wide smile
-Story: విప్పుతున్న వాన దగ్గర కొబ్బరి కొమ్మల మద్ధతులో కోకొని పిల్ల: పిట్టలయిన చిల్లు చెబుతూ అబద్ధం撒యింది. / సాయంత్రపు వేడి గాలి నర్తిస్తూ పిట్ట గమనించటం, అబద్ధము ఎర్రని కొబ్బరి మాండలంపై చాటుకుంటుంది. / పిట్ట మంటలు పుట్టినట్టు వర్ణిస్తూ, పజిల్ పై పటుకట్టుకోవడం ఆపి, నిజంగా చెప్పాడు. / సూర్యుడు చివరికి చిరునవ్వుతూ, నిదానమైన పిట్ట కథను దీప్తి వర్ణంతో అందుకున్నాడు. / నీతి: అబద్ధం మనకు బంధాలు పగులగొడుతుంది, నిజం మనకు వెలుగునిస్తుంది.
+Gemini gemini-3.7-flash error: HTTPSConnectionPool(host='generativelanguage.googleapis.com', port=443): Read timed out. (read timeout=180)
+Story written by Gemini (gemini-3.6-flash)
+Short idea: తీపి క్షమాపణ | Samu, a cute chubby golden-brown Samosa character with big expressive dark eyes, tiny hands, and a soft baked texture. | Jilu, a glossy orange spiral Jalebi character with shiny syrup droplets, big sparkly eyes, and cute little feet.
+Story: హైదరాబాద్ రాత్రి వెలుగుల్లో సమోసా చిన్న పొరపాటు చేసి జలేబీని బాధపెట్టింది. / కోపంగా ఉన్న జలేబీకి సమోసా చేతులు జోడించి మనస్ఫూర్తిగా క్షమించు అని అడిగింది. / సమోసా నిజాయితీని చూసి జలేబీ కోపం కరిగిపోయి ఆనందంగా కౌగిలించుకుంది. / చిన్న క్షమాపణతో మళ్ళీ వారిద్దరి మధ్య తీపి స్నేహం వికసించింది. / నీతి: ఒక్క క్షమాపణ మన మనసుల మధ్య ఉన్న దూరాన్ని తుడిచేసి స్నేహాన్ని నిలబెడుతుంది.
   Hugging Face failed (403): {"error":"This authentication method does not have sufficient permissions to call Inference Providers on behalf of user saisrehan"}; trying Pollinations
   opening keyframe via pollinations
-  video model failed - zerogpu-aoti/wan2-2-fp8da-aoti-faster: You have exceeded your free ZeroGPU quota (75s requested vs. 71s left). Try again in 21:52:49. Subscribe to Hugging Face PRO to get 40 min of ZeroGPU quota a day - https://huggingface.co/subscribe/pro?from=ZeroGPU
-  retrying with a shorter 4.0s scene to fit the 71s of quota left
-  beat 1/4 animated via zerogpu-aoti/wan2-2-fp8da-aoti-faster
-  video model failed - zerogpu-aoti/wan2-2-fp8da-aoti-faster: You have exceeded your free ZeroGPU quota (75s requested vs. 41s left). Try again in 21:52:17. Subscribe to Hugging Face PRO to get 40 min of ZeroGPU quota a day - https://huggingface.co/subscribe/pro?from=ZeroGPU
-  retrying with a shorter 2.3s scene to fit the 41s of quota left
-  beat 2/4 animated via zerogpu-aoti/wan2-2-fp8da-aoti-faster
-  video model failed - zerogpu-aoti/wan2-2-fp8da-aoti-faster: You have exceeded your free ZeroGPU quota (75s requested vs. 27s left). Try again in 21:52:00. Subscribe to Hugging Face PRO to get 40 min of ZeroGPU quota a day - https://huggingface.co/subscribe/pro?from=ZeroGPU
-  retrying with a shorter 1.5s scene to fit the 27s of quota left
-  beat 3/4 animated via zerogpu-aoti/wan2-2-fp8da-aoti-faster
-  video model failed - zerogpu-aoti/wan2-2-fp8da-aoti-faster: You have exceeded your free ZeroGPU quota (75s requested vs. 18s left). Try again in 21:51:48. Subscribe to Hugging Face PRO to get 40 min of ZeroGPU quota a day - https://huggingface.co/subscribe/pro?from=ZeroGPU
-  free GPU quota used up after 3 beat(s): You have exceeded your free ZeroGPU quota (75s requested vs. 18s left). Try again in 21:51:48. Subscribe to Hugging Face PRO to get 40 min of ZeroGPU quota a day - https://huggingface.co/subscribe/pro?from=ZeroGPU
-Music: synthesized playful instrumental
-Animated beats: 3 of 4, narration lines: 3 + moral, reel 24.8s
-Built out/reel.mp4 with free animated short (3/4 beats animated) (7.2 MB)
+  video model failed - zerogpu-aoti/wan2-2-fp8da-aoti-faster: You have exceeded your free ZeroGPU quota (75s requested vs. 18s left). Try again in 21:37:58. Subscribe to Hugging Face PRO to get 40 min of ZeroGPU quota a day - https://huggingface.co/subscribe/pro?from=ZeroGPU
+  free GPU quota used up after 0 beat(s): You have exceeded your free ZeroGPU quota (75s requested vs. 18s left). Try again in 21:37:58. Subscribe to Hugging Face PRO to get 40 min of ZeroGPU quota a day - https://huggingface.co/subscribe/pro?from=ZeroGPU
+No beat could be animated (free quota or Space down). Skipping this run; the next run will try again.
+Animated short not made this run; nothing posted. The next scheduled run will try again.
