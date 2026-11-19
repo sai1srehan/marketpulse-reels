@@ -1,20 +1,14 @@
-run at 2026-11-19T11:28:04.137572+00:00 event=workflow_dispatch
+run at 2026-11-19T19:26:59.425980+00:00 event=schedule
 MODE: PIXAR_STORIES=1 MANUAL_VIDEOS=0 OMNI_VIDEOS=0 | story AI: Gemini | images: free Pollinations
 Gemini gemini-3.8-flash error: HTTPSConnectionPool(host='generativelanguage.googleapis.com', port=443): Read timed out. (read timeout=100)
+Gemini gemini-3.7-flash busy (503), retrying
 Gemini gemini-3.7-flash error: HTTPSConnectionPool(host='generativelanguage.googleapis.com', port=443): Read timed out. (read timeout=100)
+Gemini gemini-3.6-flash busy (503), retrying
 Story written by Gemini (gemini-3.6-flash)
-Short idea: కొబ్బరి చెట్టు కింద తీపి విందు | Bujji, a tiny orange hermit crab with a polished coconut-shell house on its back and huge bright blue eyes. | Kiki, a cute plump green sea turtle hatchling with a glossy turquoise shell and expressive hazel eyes.
-Story: సముద్ర తీరంలో కొబ్బరి నీటి బొట్టు కోసం బుజ్జి పీత, కీకి తాబేలు వేచి ఉన్నాయి. / ఆత్రంతో కీకి చెట్టును తట్టడంతో పైన ఉన్న ఇసుకంతా వారి ముఖాలపై పడిపోయింది. / బుజ్జి మెల్లగా కీకిని శాంతపరిచి, చిన్ని గిన్నెను కదలకుండా పట్టుకుని పైకి చూసింది. / చక్కటి తీపి బొట్టు గిన్నెలో పడటంతో, ఇద్దరు మిత్రులు ఆనందంగా ఆ తీపిని పంచుకున్నారు. / నీతి: ప్రశాంతంగా ఓర్పుతో వేచి ఉంటే మధురమైన అనుభూతి మన సొంతమవుతుంది.
-  image attempt 1 failed: 503 {"status":503,"success":false,"error":{"code":"SERVICE_UNAVAILABLE","message":"The Classic API is at its limit right now. Retry after 10s, or get full
-  waiting 45s for the free image tier
-  image attempt 2 failed: 503 {"status":503,"success":false,"error":{"code":"SERVICE_UNAVAILABLE","message":"The Classic API is at its limit right now. Retry after 10s, or get full
-  waiting 45s for the free image tier
-  image attempt 3 failed: 503 {"status":503,"success":false,"error":{"code":"SERVICE_UNAVAILABLE","message":"The Classic API is at its limit right now. Retry after 10s, or get full
-  waiting 45s for the free image tier
-  image attempt 4 failed: 503 {"status":503,"success":false,"error":{"code":"SERVICE_UNAVAILABLE","message":"The Classic API is at its limit right now. Retry after 10s, or get full
-  waiting 45s for the free image tier
+Short idea: తోటలో విరిసిన చిన్న క్షమాపణ | Chinnu: A tiny Pixar-style bright yellow metal watering can with big expressive blue eyes, two cute little arms, and a friendly innocent smile. | Milli: A soft pastel-pink baby snail with a sparkly purple shell, big curious dark eyes, and tiny cute antennae.
+Story: పాఠశాల తోటలో చిన్ను నీటి కుండ ఆడుకుంటూ పొరపాటున మిల్లీ నత్తపై బురద చల్లింది. / తన తప్పు తెలుసుకున్న చిన్ను వెంటనే ఒక మెత్తని ఆకుతో మిల్లీని శుభ్రం చేసింది. / తల దించుకుని మనస్ఫూర్తిగా సారీ చెబుతూ మిల్లీకి ఒక తీపి మంచి నీటి బొట్టును ఇచ్చింది. / మిల్లీ ఆనందంగా నవ్వి చిన్నుని ప్రేమగా హత్తుకోవడంతో ఇద్దరి స్నేహం మరింతగా వికసించింది. / నీతి: మనస్ఫూర్తిగా చెప్పే ఒక చిన్న క్షమాపణ ఎలాంటి దూరాలనైనా చెరిపేయగలదు.
   opening keyframe via pollinations
-  Kaggle push: Kernel version 4 successfully pushed.  Please check progress at https://www.kaggle.com/code/saisrehan1/telugu-reel-video
+  Kaggle push: Kernel version 6 successfully pushed.  Please check progress at https://www.kaggle.com/code/saisrehan1/telugu-reel-video
   Kaggle GPU working... 1 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
   Kaggle GPU working... 2 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
   Kaggle GPU working... 4 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
@@ -62,7 +56,7 @@ Story: సముద్ర తీరంలో కొబ్బరి నీటి 
   Kaggle GPU working... 67 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
   Kaggle GPU working... 68 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
   Kaggle GPU working... 70 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 72 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 71 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
   Kaggle GPU working... 73 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
   Kaggle GPU working... 75 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
   Kaggle GPU working... 76 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
@@ -89,19 +83,21 @@ Story: సముద్ర తీరంలో కొబ్బరి నీటి 
   Kaggle GPU working... 108 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
   Kaggle GPU working... 109 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
   Kaggle GPU working... 111 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 112 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 114 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 115 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 117 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 118 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 120 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 121 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 123 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 124 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 126 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 127 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 129 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle made 4 animated scene(s) in 130 min
+  Kaggle finished: saisrehan1/telugu-reel-video has status "KernelWorkerStatus.COMPLETE"
+  Kaggle notebook log (last lines):
+    92%|█████████▏| 23/25 [20:35<01:46, 53.44s/it]
+    96%|█████████▌| 24/25 [21:29<00:53, 53.61s/it]
+    100%|██████████| 25/25 [22:23<00:00, 53.51s/it]
+    100%|██████████| 25/25 [22:23<00:00, 53.72s/it]
+    beat 4/4 done at 6711 s
+    time budget reached, stopping early
+    /usr/local/lib/python3.13/dist-packages/mistune.py:435: SyntaxWarning: invalid escape sequence '\|'
+    cells[i][c] = re.sub('\\\\\|', '|', cell)
+    /usr/local/lib/python3.13/dist-packages/nbconvert/filters/filter_links.py:36: SyntaxWarning: invalid escape sequence '\_'
+    text = re.sub(r'_', '\_', text) # Escape underscores in display text
+    [NbConvertApp] Converting notebook __script__.ipynb to html
+    [NbConvertApp] Writing 408540 bytes to __results__.html
+  Kaggle made 4 animated scene(s) in 112 min
 Music: synthesized playful instrumental
-Animated beats: 4 of 4, narration lines: 4 + moral, reel 28.4s
-Built out/reel.mp4 with free animated short (4/4 beats animated) (8.4 MB)
+Animated beats: 4 of 4, narration lines: 4 + moral, reel 29.6s
+Built out/reel.mp4 with free animated short (4/4 beats animated) (7.5 MB)
