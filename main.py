@@ -2226,22 +2226,32 @@ def animate_still(img, motion, out, seconds, seed):
     tok = (os.getenv("HF_TOKEN") or "").strip() or None
     last = ""
     for space in VIDEO_SPACES:
-        try:
-            c = Client(space, token=tok, verbose=False)
-            res = c.predict(input_image=handle_file(str(img)), prompt=motion, negative_prompt=VIDEO_NEG,
-                            steps=int(os.getenv("SHORT_STEPS", "4")),   # fewer steps = less of the free GPU quota per scene
-                            duration_seconds=seconds, seed=seed, randomize_seed=False, api_name="/generate_video")
-            vid = res[0] if isinstance(res, (list, tuple)) else res
-            if isinstance(vid, dict):
-                vid = vid.get("video") or vid.get("path")
-            shutil.copy(vid, out)
-            return space
-        except Exception as e:
-            msg = str(e)
-            last = f"{space}: {msg[:300]}"
-            print(f"  video model failed - {last}")
-            if "quota" in msg.lower():   # the free quota is per account/IP across all ZeroGPU Spaces
-                raise QuotaError(msg[:300])
+        secs = seconds
+        for _try in range(2):
+            try:
+                c = Client(space, token=tok, verbose=False)
+                res = c.predict(input_image=handle_file(str(img)), prompt=motion, negative_prompt=VIDEO_NEG,
+                                steps=int(os.getenv("SHORT_STEPS", "4")),   # fewer steps = less of the free GPU quota per scene
+                                duration_seconds=secs, seed=seed, randomize_seed=False, api_name="/generate_video")
+                vid = res[0] if isinstance(res, (list, tuple)) else res
+                if isinstance(vid, dict):
+                    vid = vid.get("video") or vid.get("path")
+                shutil.copy(vid, out)
+                return space
+            except Exception as e:
+                msg = str(e)
+                last = f"{space}: {msg[:300]}"
+                print(f"  video model failed - {last}")
+                if "quota" not in msg.lower():
+                    break   # not a quota problem: try the next Space
+                # "75s requested vs. 71s left": use the leftover quota for a shorter scene instead of wasting it
+                m = re.search(r"(\d+)s requested vs\.? (\d+)s left", msg)
+                if _try == 0 and m and int(m.group(2)) >= 25:
+                    req, left = int(m.group(1)), int(m.group(2))
+                    secs = round(max(1.5, secs * left / req * 0.85), 1)
+                    print(f"  retrying with a shorter {secs}s scene to fit the {left}s of quota left")
+                    continue
+                raise QuotaError(msg[:300])   # the free quota is per account across all ZeroGPU Spaces
     raise RuntimeError(last)
 
 
