@@ -1,96 +1,43 @@
-run at 2026-11-19T07:59:46.878117+00:00 event=workflow_dispatch
+run at 2026-11-19T10:42:45.771724+00:00 event=workflow_dispatch
 MODE: PIXAR_STORIES=1 MANUAL_VIDEOS=0 OMNI_VIDEOS=0 | story AI: Gemini | images: free Pollinations
-Story written by Gemini (gemini-3.8-flash)
-Short idea: తోటలో మెరిసిన నిజాయితీ | Chinnu, an adorable chubby baby squirrel with soft caramel-brown fur, a bushy tail, and huge teary amber eyes. | Mittu, a plump emerald-green parrot wearing a tiny straw gardener hat, with kind expressive eyes and an orange beak.
-Story: మామిడి తోటలో అత్యంత తియ్యని పండు కిందపడి పగిలిపోవడంతో చిట్టి ఉడుత చిన్నూ భయపడింది. / తప్పించుకోకుండా తన తప్పేనని ఒప్పుకుంటూ చిన్నూ ఆ పండును మిట్టూ ముందు ఉంచి క్షమాపణ కోరింది. / నిజాయితీగా నిజం చెప్పిన చిన్నూ మంచి మనసును చూసి మిట్టూ ఎంతో ప్రేమగా చిరునవ్వు నవ్వింది. / ఇద్దరూ కలిసి పండును ఆస్వాదిస్తూ నిజాయితీ పంచిన తియ్యని ఆనందాన్ని మనసారా పంచుకున్నారు. / నీతి: నిజాయితీతో తప్పును ఒప్పుకుంటే దక్కే ఆదరణ అమృతం కంటే తియ్యగా ఉంటుంది.
+Gemini gemini-3.8-flash busy (503), retrying
+Gemini gemini-3.8-flash busy (503), retrying
+Gemini gemini-3.8-flash error: HTTPSConnectionPool(host='generativelanguage.googleapis.com', port=443): Read timed out. (read timeout=100)
+Gemini gemini-3.7-flash error: HTTPSConnectionPool(host='generativelanguage.googleapis.com', port=443): Read timed out. (read timeout=100)
+Gemini gemini-3.6-flash busy (503), retrying
+Gemini gemini-3.6-flash busy (503), retrying
+Gemini gemini-3.6-flash busy (503), retrying
+Gemini gemini-3.6-flash failed: 503 {
+  "error": {
+    "code": 503,
+    "message": "This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.",
+    "status": "UNAVAILABLE"
+  }
+}
+
+Story written by Gemini (gemini-3.5-flash-lite)
+Short idea: రంగుల బొమ్మల వేడుక | A tiny blue teddy bear with big expressive eyes, soft fuzzy fur, and a curious, gentle expression.
+Story: రాత్రి వేళ బొమ్మల అంగడిలో చిన్న నీలి రంగు టెడ్డీ బేర్ తనలాగే ఉండాలని గట్టిగా కోరుకుంది. / అద్దంలో తనని తాను చూసుకుంటూ అందరిలాగే రంగులు వేసుకోవాలని తెగ ప్రయత్నించింది. / కానీ రంగులు కరిగిపోవడంతో తన అసలైన రూపమే అందంగా ఉందని అది అర్థం చేసుకుంది. / ఇతరులను చూసి మారడం కంటే మనలా మనం ఉండటమే నిజమైన అందమని అది నవ్వింది. / నీతి: మన సహజమైన రూపాన్ని ప్రేమించడమే నిజమైన ఆత్మవిశ్వాసం.
   opening keyframe via pollinations
-  Kaggle push: Kernel version 1 successfully pushed.  Please check progress at https://www.kaggle.com/code/saisrehan1/telugu-reel-video
-  Kaggle GPU working... 1 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 2 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 4 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 5 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 7 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 8 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 10 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 11 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 13 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 14 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 16 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 17 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 19 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 20 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 22 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 23 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 25 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 26 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 28 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 29 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 31 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 32 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 34 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 35 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 37 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 38 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 40 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 41 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 43 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 44 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 46 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 47 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 49 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 50 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 52 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 53 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 55 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 56 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 58 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 59 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 61 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 62 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 64 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 65 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 67 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 68 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 70 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 71 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 73 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 74 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 76 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 77 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 79 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 81 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 82 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 84 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 85 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 87 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 88 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 90 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 91 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 93 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 94 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 96 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 97 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 99 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 100 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 102 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 103 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 105 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 106 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 108 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 109 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 111 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 112 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 114 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 115 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 117 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 118 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 120 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 121 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 123 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 124 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 126 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 127 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle GPU working... 129 min (e leaderboard. It can also occur if the notebook is private.)
-  Kaggle video failed: Kaggle finished without clips (status: otebook URL (kaggle.com/code/owner/KERNEL-SLUG), not from the leaderboard. It can also occur if the notebook is private.)
+  Kaggle push: Kernel version 2 successfully pushed.  Please check progress at https://www.kaggle.com/code/saisrehan1/telugu-reel-video
+  Kaggle GPU working... 1 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 2 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 4 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 5 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle finished: saisrehan1/telugu-reel-video has status "KernelWorkerStatus.ERROR"
+  Kaggle notebook log (last lines):
+    out = torch.nn.functional.scaled_dot_product_attention(
+    query=query,
+    ...<6 lines>...
+    enable_gqa=enable_gqa,
+    )
+    torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 142.00 MiB. GPU 0 has a total capacity of 14.56 GiB of which 102.81 MiB is free. Including non-PyTorch memory, this process has 14.46 GiB 
+    /usr/local/lib/python3.13/dist-packages/mistune.py:435: SyntaxWarning: invalid escape sequence '\|'
+    cells[i][c] = re.sub('\\\\\|', '|', cell)
+    /usr/local/lib/python3.13/dist-packages/nbconvert/filters/filter_links.py:36: SyntaxWarning: invalid escape sequence '\_'
+    text = re.sub(r'_', '\_', text) # Escape underscores in display text
+    [NbConvertApp] Converting notebook __script__.ipynb to html
+    [NbConvertApp] Writing 382981 bytes to __results__.html
+  Kaggle video failed: Kaggle finished without clips (status: saisrehan1/telugu-reel-video has status "KernelWorkerStatus.ERROR")
 No scene could be animated (see the video lines above). Skipping this run; the next run will try again.
 Animated short not made this run; nothing posted. The next scheduled run will try again.
