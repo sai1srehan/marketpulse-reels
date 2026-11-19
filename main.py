@@ -175,20 +175,23 @@ def gemini_models():
     if forced:
         _GEMINI_MODELS = [forced]
         return _GEMINI_MODELS
-    found = []
+    found, lite = [], []
     try:
         r = requests.get("https://generativelanguage.googleapis.com/v1beta/models",
                          headers={"x-goog-api-key": gemini_key()}, params={"pageSize": 200}, timeout=30)
         r.raise_for_status()
         for md in r.json().get("models", []):
             name = md.get("name", "").replace("models/", "")
-            mm = re.fullmatch(r"gemini-(\d+(?:\.\d+)*)-flash", name)
+            mm = re.fullmatch(r"gemini-(\d+(?:\.\d+)*)-flash(-lite)?", name)
             if mm and "generateContent" in md.get("supportedGenerationMethods", []):
-                found.append((tuple(int(x) for x in mm.group(1).split(".")), name))
+                (lite if mm.group(2) else found).append((tuple(int(x) for x in mm.group(1).split(".")), name))
     except Exception as e:
         print(f"Gemini model list failed ({e}); using built-in names")
     found.sort(reverse=True)
-    names = [n for _, n in found][:3] + ["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-2.5-flash"]
+    lite.sort(reverse=True)
+    # flash-lite models have their own (usually larger) free quota: try them before giving up on Gemini
+    names = [n for _, n in found][:3] + [n for _, n in lite][:2] + \
+        ["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-2.5-flash", "gemini-2.5-flash-lite"]
     _GEMINI_MODELS = list(dict.fromkeys(names))
     return _GEMINI_MODELS
 
@@ -217,7 +220,7 @@ def llm_json_text(prompt):
                                       headers={"x-goog-api-key": gemini_key(), "Content-Type": "application/json"},
                                       json={"contents": [{"role": "user", "parts": [{"text": prompt}]}],
                                             "generationConfig": {"responseMimeType": "application/json", "temperature": 1.0,
-                                                                 "maxOutputTokens": 8192}}, timeout=180)
+                                                                 "maxOutputTokens": 8192}}, timeout=100)
                     if r.status_code not in (500, 503):
                         break
                     print(f"Gemini {model} busy ({r.status_code}), retrying")

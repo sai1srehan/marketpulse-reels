@@ -5,3 +5,4 @@ edge-tts>=6.1.9
 gTTS>=2.5.1
 gradio_client>=2.0
 kaggle>=1.7
+six
