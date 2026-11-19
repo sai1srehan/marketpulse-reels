@@ -2345,17 +2345,36 @@ def kaggle_animate(key_png, motions, seed, workdir):
     print(f"  Kaggle push: {msg[-300:]}")
     if code != 0 or "error" in msg.lower():
         raise RuntimeError(f"Kaggle push failed: {msg[-300:]}")
+    # use the exact notebook address Kaggle reports (the account it really went to), not the one built from the secret
+    m = re.search(r"kaggle\.com/code/([^/\s]+)/([^/\s?#]+)", msg)
+    if m:
+        if f"{m.group(1)}/{m.group(2)}".lower() != kid.lower():
+            print(f"  note: Kaggle created the notebook as {m.group(1)}/{m.group(2)} "
+                  f"(set the KAGGLE_USERNAME secret to '{m.group(1)}')")
+        kid = f"{m.group(1)}/{m.group(2)}"
     deadline = time.time() + int(os.getenv("KAGGLE_TIMEOUT_MIN", "130")) * 60
-    status, t_start = "", time.time()
+    status, t_start, errors = "", time.time(), 0
     time.sleep(60)
     while time.time() < deadline:
         code, status = kaggle_cli("kernels", "status", kid, timeout=120)
         s = status.lower()
+        if code != 0 or "denied" in s or "cannot access" in s or "traceback" in s:
+            errors += 1
+            if errors == 1:
+                print(f"  Kaggle status check failed for {kid}: {status[-500:]}")
+            if errors >= 5:
+                raise RuntimeError(f"Kaggle status keeps failing for {kid}: {status[-300:]}")
+            time.sleep(60)
+            continue
+        errors = 0
         if "complete" in s or "error" in s or "cancel" in s:
+            print(f"  Kaggle finished: {status[-120:]}")
             break
         print(f"  Kaggle GPU working... {int(time.time() - t_start) // 60} min ({status[-60:]})")
         time.sleep(90)
     code, msg = kaggle_cli("kernels", "output", kid, "-p", str(out), timeout=900)
+    if code != 0:
+        print(f"  Kaggle output download problem: {msg[-400:]}")
     log = next(iter(out.glob("*.log")), None)
     if log:   # show the notebook's own progress lines (GPU type, timings, errors)
         txt = log.read_text(encoding="utf-8", errors="ignore")
