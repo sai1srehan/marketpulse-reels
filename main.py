@@ -193,16 +193,21 @@ def gemini_models():
     return _GEMINI_MODELS
 
 
+def free_llm_text(prompt):
+    """Free, no-key text model (Pollinations)."""
+    r = requests.post("https://text.pollinations.ai/openai", timeout=240,
+                      json={"model": os.getenv("POLLINATIONS_TEXT_MODEL", "openai"), "temperature": 1.0,
+                            "messages": [{"role": "user", "content": prompt}], "response_format": {"type": "json_object"}})
+    r.raise_for_status()
+    print(f"Story written by Pollinations ({r.json().get('model', '?')}, free)")
+    return r.json()["choices"][0]["message"]["content"]
+
+
 def llm_json_text(prompt):
     """Ask the configured AI (Gemini first if GEMINI_API_KEY is set, otherwise Claude, otherwise the free
     no-key Pollinations text API) and return its raw text."""
     if not gemini_key() and not anthropic_key():
-        r = requests.post("https://text.pollinations.ai/openai", timeout=240,
-                          json={"model": os.getenv("POLLINATIONS_TEXT_MODEL", "openai"), "temperature": 1.0,
-                                "messages": [{"role": "user", "content": prompt}], "response_format": {"type": "json_object"}})
-        r.raise_for_status()
-        print(f"Story written by Pollinations ({r.json().get('model', '?')}, free)")
-        return r.json()["choices"][0]["message"]["content"]
+        return free_llm_text(prompt)
     if gemini_key():
         for model in list(gemini_models()):
             try:
@@ -226,11 +231,14 @@ def llm_json_text(prompt):
                 print(f"Gemini {model} returned no text: {str(r.json())[:200]}")
             except requests.HTTPError as e:
                 print(f"Gemini {model} failed: {e.response.status_code} {e.response.text[:200]}")
-                if e.response.status_code in (400, 401, 403, 429):
-                    break
+                if e.response.status_code in (401, 403):
+                    break   # key problem: other models will fail the same way
+                # 429 (quota) and 400 are per model: the next, older model has its own free quota
             except Exception as e:
                 print(f"Gemini {model} error: {e}")
-        raise RuntimeError("Gemini did not return a story")
+        if not anthropic_key():
+            print("All Gemini models failed; using the free Pollinations text model instead.")
+            return free_llm_text(prompt)
     r = requests.post("https://api.anthropic.com/v1/messages",
                       headers={"x-api-key": anthropic_key(), "anthropic-version": "2023-06-01", "content-type": "application/json"},
                       json={"model": os.getenv("CLAUDE_MODEL", "claude-sonnet-5-5"), "max_tokens": 4000,
@@ -382,7 +390,8 @@ Return ONLY JSON:
 "lines": [{{"who": "narrator" or a character id, "text": "Telugu line"}}],
 "shots": [{{"lines": [line indexes, 0-based], "chars": [character ids visible], "prompt": "English image prompt"}}],
 "tag": "one real English hashtag about the theme, e.g. #kindness", "hashtags": ["#kidsstories", "#moralstory"]}}
-Every shot's "chars" must list the character ids that appear in it (at least one)."""
+Every shot's "chars" must list the character ids that appear in it (at least one).
+The narrator is only a voice: never list the narrator in "characters" or "chars"."""
     tries = 3 if (gemini_key() or anthropic_key()) else 5   # the free model fails more often
     for attempt in range(tries):
         try:
@@ -392,6 +401,8 @@ Every shot's "chars" must list the character ids that appear in it (at least one
             speakers, looks = {}, {}
             for k, c in enumerate(chars):
                 cid = re.sub(r"[^a-z0-9_]", "", str(c["id"]).lower())[:24] or f"c{k}"
+                if cid == "narrator" or "narrator" in str(c.get("look", "")).lower():
+                    continue   # the narrator is only a voice, never drawn
                 assert TELUGU_RE.search(str(c["name"])) and len(str(c["look"])) > 15, "bad character"
                 assert not TELUGU_RE.search(str(c["look"]) + str(raw.get("setting", ""))), "look/setting must be English"
                 hue = (k * 0.33 + random.random() * 0.2) % 1
@@ -400,6 +411,7 @@ Every shot's "chars" must list the character ids that appear in it (at least one
                                  "semi": max(-5, min(5, int(c.get("pitch", 0)))), "rate": 0, "color": rgb}
                 looks[cid] = str(c["look"]).strip()
                 c["id"] = cid
+            assert speakers, "no drawable characters"
             lines = []
             for it in raw["lines"]:
                 who = re.sub(r"[^a-z0-9_]", "", str(it["who"]).lower())
@@ -2440,6 +2452,10 @@ def generate():
     OUT.mkdir(exist_ok=True)
     state = load_state()
     ig = recent_ig_titles(ig_user(), ig_token()) if ig_token() else []
+    print(f"MODE: PIXAR_STORIES={os.getenv('PIXAR_STORIES', '0')} MANUAL_VIDEOS={os.getenv('MANUAL_VIDEOS', '0')} "
+          f"OMNI_VIDEOS={os.getenv('OMNI_VIDEOS', '0')} | story AI: "
+          f"{'Gemini' if gemini_key() else 'Claude' if anthropic_key() else 'free Pollinations'} | "
+          f"images: {'Hugging Face' if os.getenv('HF_TOKEN') else 'free Pollinations'}")
     if manual_wanted():
         if not generate_manual(state, ig):
             set_output("has_post", "false")
@@ -2454,8 +2470,10 @@ def generate():
             story = pixar_ai_story([t for t in used_titles if t], [m_ for m_ in used_morals if m_])
         except Exception as e:
             print(f"AI Pixar story failed: {e}")
-        if not story:
-            print("AI Pixar story unavailable: falling back to the normal story picker.")
+        if not story:   # never fall back to the old built-in stories in Pixar mode
+            print("AI Pixar story could not be written this run (see errors above). Skipping; the next run will try again.")
+            set_output("has_post", "false")
+            return
     story = story or choose_story(state, ig)
     found = {st["id"]: len(story_clips(st["id"])) for st in STORIES}
     print("Clip files found per story:", json.dumps(found))
