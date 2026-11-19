@@ -2255,6 +2255,120 @@ def animate_still(img, motion, out, seconds, seed):
     raise RuntimeError(last)
 
 
+# ------------------------------------------------ Kaggle free GPU backend (about 30 GPU hours per week, free)
+# The bot pushes a private Kaggle notebook with the job embedded, Kaggle runs it on a free GPU, and the bot downloads
+# the clips. Needs the secret KAGGLE_USERNAME plus KAGGLE_API_TOKEN (new) or KAGGLE_KEY (legacy).
+KAGGLE_SCRIPT = r'''
+import base64, io, json, os, subprocess, sys, time
+t0 = time.time()
+JOB = json.loads(base64.b64decode("__JOB__").decode())
+subprocess.run([sys.executable, "-m", "pip", "install", "-q", "-U", "diffusers>=0.35", "transformers>=4.51",
+                "accelerate>=1.6", "ftfy", "sentencepiece", "imageio", "imageio-ffmpeg"], check=True)
+import numpy as np
+import torch
+from PIL import Image
+from diffusers import AutoencoderKLWan, WanImageToVideoPipeline
+from diffusers.utils import export_to_video
+print("GPU:", torch.cuda.get_device_name(0), "| setup", round(time.time() - t0), "s", flush=True)
+dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
+vae = AutoencoderKLWan.from_pretrained(JOB["model"], subfolder="vae", torch_dtype=torch.float32)
+pipe = WanImageToVideoPipeline.from_pretrained(JOB["model"], vae=vae, torch_dtype=dtype)
+pipe.enable_model_cpu_offload()
+print("model loaded", round(time.time() - t0), "s", flush=True)
+img = Image.open(io.BytesIO(base64.b64decode(JOB["image"]))).convert("RGB").resize((JOB["width"], JOB["height"]))
+os.makedirs("/kaggle/working", exist_ok=True)
+for i, prompt in enumerate(JOB["beats"], 1):
+    frames = pipe(image=img, prompt=prompt, negative_prompt=JOB["neg"], height=JOB["height"], width=JOB["width"],
+                  num_frames=JOB["frames"], guidance_scale=JOB["guidance"], num_inference_steps=JOB["steps"],
+                  generator=torch.Generator("cpu").manual_seed(JOB["seed"] + i)).frames[0]
+    export_to_video(frames, f"/kaggle/working/beat{i}.mp4", fps=JOB["fps"])
+    last = frames[-1]
+    img = last if isinstance(last, Image.Image) else Image.fromarray((np.clip(last, 0, 1) * 255).round().astype("uint8"))
+    print(f"beat {i}/{len(JOB['beats'])} done at {round(time.time() - t0)} s", flush=True)
+    if time.time() - t0 > JOB["budget"]:
+        print("time budget reached, stopping early", flush=True)
+        break
+'''
+
+
+def kaggle_user():
+    u = (os.getenv("KAGGLE_USERNAME") or "").strip()
+    if u:
+        return u
+    f = pathlib.Path.home() / ".kaggle" / "kaggle.json"
+    return json.loads(f.read_text()).get("username", "") if f.exists() else ""
+
+
+def kaggle_ready():
+    """Username plus either the new API token (KAGGLE_API_TOKEN) or the legacy key (KAGGLE_KEY / kaggle.json)."""
+    home = pathlib.Path.home() / ".kaggle"
+    cred = any((os.getenv(k) or "").strip() for k in ("KAGGLE_API_TOKEN", "KAGGLE_KEY")) \
+        or (home / "kaggle.json").exists() or (home / "access_token").exists()
+    return bool(kaggle_user()) and cred
+
+
+def kaggle_cli(*args, timeout=300):
+    entry = "import sys; from kaggle.cli import main; sys.argv = ['kaggle'] + sys.argv[1:]; main()"
+    p = subprocess.run([sys.executable, "-c", entry, *args], capture_output=True, text=True, timeout=timeout)
+    return p.returncode, (p.stdout + p.stderr).strip()
+
+
+def kaggle_animate(key_png, motions, seed, workdir):
+    """Animate all beats in one Kaggle GPU session (chained from each beat's last frame). Returns clip paths."""
+    import io
+    slug = os.getenv("KAGGLE_KERNEL_SLUG", "telugu-reel-video")
+    kid = f"{kaggle_user()}/{slug}"
+    work = workdir / "kaggle"
+    out = work / "out"
+    out.mkdir(parents=True, exist_ok=True)
+    for old in list(work.glob("*.*")) + list(out.glob("*")):
+        old.unlink()
+    w, h = 480, 832   # Wan 480p vertical (multiples of 32); upscaled to 1080x1920 later
+    buf = io.BytesIO()
+    Image.open(key_png).convert("RGB").resize((w, h), Image.LANCZOS).save(buf, "JPEG", quality=92)
+    job = {"image": base64.b64encode(buf.getvalue()).decode(), "beats": motions, "neg": VIDEO_NEG, "seed": seed,
+           "width": w, "height": h, "fps": 24, "frames": int(os.getenv("KAGGLE_FRAMES", "121")),   # 121 frames = 5 s
+           "steps": int(os.getenv("KAGGLE_STEPS", "25")), "guidance": float(os.getenv("KAGGLE_GUIDANCE", "5")),
+           "model": os.getenv("KAGGLE_MODEL", "Wan-AI/Wan2.2-TI2V-5B-Diffusers"),
+           "budget": int(os.getenv("KAGGLE_BUDGET_MIN", "100")) * 60}
+    (work / "gen.py").write_text(KAGGLE_SCRIPT.replace("__JOB__", base64.b64encode(json.dumps(job).encode()).decode()),
+                                 encoding="utf-8")
+    (work / "kernel-metadata.json").write_text(json.dumps({
+        "id": kid, "title": slug, "code_file": "gen.py", "language": "python", "kernel_type": "script",
+        "is_private": True, "enable_gpu": True, "enable_internet": True,
+        "machine_shape": os.getenv("KAGGLE_ACCELERATOR", "NvidiaTeslaT4"),
+        "dataset_sources": [], "competition_sources": [], "kernel_sources": [], "model_sources": []}), encoding="utf-8")
+    code, msg = kaggle_cli("kernels", "push", "-p", str(work))
+    print(f"  Kaggle push: {msg[-300:]}")
+    if code != 0 or "error" in msg.lower():
+        raise RuntimeError(f"Kaggle push failed: {msg[-300:]}")
+    deadline = time.time() + int(os.getenv("KAGGLE_TIMEOUT_MIN", "130")) * 60
+    status, t_start = "", time.time()
+    time.sleep(60)
+    while time.time() < deadline:
+        code, status = kaggle_cli("kernels", "status", kid, timeout=120)
+        s = status.lower()
+        if "complete" in s or "error" in s or "cancel" in s:
+            break
+        print(f"  Kaggle GPU working... {int(time.time() - t_start) // 60} min ({status[-60:]})")
+        time.sleep(90)
+    code, msg = kaggle_cli("kernels", "output", kid, "-p", str(out), timeout=900)
+    log = next(iter(out.glob("*.log")), None)
+    if log:   # show the notebook's own progress lines (GPU type, timings, errors)
+        txt = log.read_text(encoding="utf-8", errors="ignore")
+        try:
+            txt = "".join(x.get("data", "") for x in json.loads(txt))   # Kaggle logs are a JSON list of {data: ...}
+        except Exception:
+            pass
+        tail = [ln.strip() for ln in txt.splitlines() if ln.strip()][-12:]
+        print("  Kaggle notebook log (last lines):\n    " + "\n    ".join(x[:200] for x in tail))
+    clips = sorted(out.glob("beat*.mp4"), key=lambda p: int(re.sub(r"\D", "", p.stem) or 0))
+    if not clips:
+        raise RuntimeError(f"Kaggle finished without clips (status: {status[-120:]})")
+    print(f"  Kaggle made {len(clips)} animated scene(s) in {int(time.time() - t_start) // 60} min")
+    return clips
+
+
 def last_frame(clip, png):
     run(["ffmpeg", "-y", "-loglevel", "error", "-sseof", "-0.2", "-i", str(clip), "-update", "1", "-frames:v", "1", str(png)])
 
@@ -2349,11 +2463,18 @@ def generate_pixar_short(state, ig_titles):
         print(f"  opening keyframe via {prov}")
         secs = float(os.getenv("SHORT_BEAT_SECONDS", "5"))
         clips, src, animated = [], key, 0
-        for i, beat in enumerate(idea["beats"]):
+        motions = [f"{b} The characters look exactly the same: {looks}. Pixar-style 3D animation, smooth natural motion."
+                   for b in idea["beats"]]
+        if kaggle_ready() and os.getenv("VIDEO_BACKEND", "auto") in ("auto", "kaggle"):
+            try:
+                clips = kaggle_animate(key, motions, seed, d)
+                animated = len(clips)
+            except Exception as e:
+                print(f"  Kaggle video failed: {str(e)[:500]}; trying the free Hugging Face Spaces instead")
+        for i, motion in enumerate(motions if not clips else []):
             clip = d / f"beat{i + 1}.mp4"
             try:
-                space = animate_still(src, f"{beat} The characters look exactly the same: {looks}. "
-                                           "Pixar-style 3D animation, smooth natural motion.", clip, secs, seed + i)
+                space = animate_still(src, motion, clip, secs, seed + i)
                 animated += 1
                 print(f"  beat {i + 1}/{len(idea['beats'])} animated via {space}")
             except QuotaError as e:

@@ -25,7 +25,7 @@ concurrency:
 jobs:
   post:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 170   # the Kaggle GPU job can take up to ~2 hours
     steps:
       - uses: actions/checkout@v4
 
@@ -67,6 +67,9 @@ jobs:
           PIXAR_CLIPS: ${{ vars.PIXAR_CLIPS || '0' }}
           PIXAR_CLIP_SECONDS: ${{ vars.PIXAR_CLIP_SECONDS || '10' }}
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+          KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
           COOLDOWN_DAYS: ${{ vars.COOLDOWN_DAYS || '30' }}
           SHOW_SUBTITLES: ${{ vars.SHOW_SUBTITLES || '0' }}
           SHOW_PROGRESS: ${{ vars.SHOW_PROGRESS || '0' }}
