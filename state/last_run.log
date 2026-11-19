@@ -1,43 +1,32 @@
-run at 2026-11-19T10:42:45.771724+00:00 event=workflow_dispatch
+run at 2026-11-19T11:07:56.543465+00:00 event=workflow_dispatch
 MODE: PIXAR_STORIES=1 MANUAL_VIDEOS=0 OMNI_VIDEOS=0 | story AI: Gemini | images: free Pollinations
-Gemini gemini-3.8-flash busy (503), retrying
-Gemini gemini-3.8-flash busy (503), retrying
 Gemini gemini-3.8-flash error: HTTPSConnectionPool(host='generativelanguage.googleapis.com', port=443): Read timed out. (read timeout=100)
 Gemini gemini-3.7-flash error: HTTPSConnectionPool(host='generativelanguage.googleapis.com', port=443): Read timed out. (read timeout=100)
-Gemini gemini-3.6-flash busy (503), retrying
-Gemini gemini-3.6-flash busy (503), retrying
-Gemini gemini-3.6-flash busy (503), retrying
-Gemini gemini-3.6-flash failed: 503 {
-  "error": {
-    "code": 503,
-    "message": "This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.",
-    "status": "UNAVAILABLE"
-  }
-}
-
-Story written by Gemini (gemini-3.5-flash-lite)
-Short idea: రంగుల బొమ్మల వేడుక | A tiny blue teddy bear with big expressive eyes, soft fuzzy fur, and a curious, gentle expression.
-Story: రాత్రి వేళ బొమ్మల అంగడిలో చిన్న నీలి రంగు టెడ్డీ బేర్ తనలాగే ఉండాలని గట్టిగా కోరుకుంది. / అద్దంలో తనని తాను చూసుకుంటూ అందరిలాగే రంగులు వేసుకోవాలని తెగ ప్రయత్నించింది. / కానీ రంగులు కరిగిపోవడంతో తన అసలైన రూపమే అందంగా ఉందని అది అర్థం చేసుకుంది. / ఇతరులను చూసి మారడం కంటే మనలా మనం ఉండటమే నిజమైన అందమని అది నవ్వింది. / నీతి: మన సహజమైన రూపాన్ని ప్రేమించడమే నిజమైన ఆత్మవిశ్వాసం.
+Story written by Gemini (gemini-3.6-flash)
+Short idea: చెరువు ఒడ్డున చిరునవ్వు | A cute, tiny vibrant green frog with huge expressive glossy golden eyes and a small rosy cheeks. | A friendly, chubby shimmering blue dragonfly with glowing iridescent wings and a warm cheerful smile.
+Story: ఎండ వేడికి తట్టుకోలేక చిట్టి కప్ప అలసిపోయి చెరువు ఒడ్డున విచారంగా కూర్చుంది. / అప్పుడు ఒక చిన్న తుమ్మెద పెద్ద తామరపాకుని కప్ప పైకి నీడగా జరిపింది. / సంతోషించిన కప్ప వెంటనే చల్లని నీటి చుక్కలను ఆ తుమ్మెదకు దాహ తీర్చడానికి ఇచ్చింది. / ఇద్దరూ ఒకరికొకరు ధన్యవాదాలు చెప్పుకుంటూ హాయిగా నీడలో మిత్రులుగా నవ్వుతూ ఉండిపోయారు. / నీతి: మనకు జరిగిన మేలును గుర్తుంచుకుని కృతజ్ఞత చూపడమే నిజమైన మానవత్వం.
+  image attempt 1 failed: 503 {"status":503,"success":false,"error":{"code":"SERVICE_UNAVAILABLE","message":"The Classic API is at its limit right now. Retry after 10s, or get full
+  waiting 45s for the free image tier
   opening keyframe via pollinations
-  Kaggle push: Kernel version 2 successfully pushed.  Please check progress at https://www.kaggle.com/code/saisrehan1/telugu-reel-video
+  Kaggle push: Kernel version 3 successfully pushed.  Please check progress at https://www.kaggle.com/code/saisrehan1/telugu-reel-video
   Kaggle GPU working... 1 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
   Kaggle GPU working... 2 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
   Kaggle GPU working... 4 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
   Kaggle GPU working... 5 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
   Kaggle finished: saisrehan1/telugu-reel-video has status "KernelWorkerStatus.ERROR"
   Kaggle notebook log (last lines):
-    out = torch.nn.functional.scaled_dot_product_attention(
-    query=query,
-    ...<6 lines>...
-    enable_gqa=enable_gqa,
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    non_blocking,
+    ^^^^^^^^^^^^^
     )
-    torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 142.00 MiB. GPU 0 has a total capacity of 14.56 GiB of which 102.81 MiB is free. Including non-PyTorch memory, this process has 14.46 GiB 
+    ^
+    torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 32.00 MiB. GPU 0 has a total capacity of 14.56 GiB of which 6.81 MiB is free. Including non-PyTorch memory, this process has 14.55 GiB mem
     /usr/local/lib/python3.13/dist-packages/mistune.py:435: SyntaxWarning: invalid escape sequence '\|'
     cells[i][c] = re.sub('\\\\\|', '|', cell)
     /usr/local/lib/python3.13/dist-packages/nbconvert/filters/filter_links.py:36: SyntaxWarning: invalid escape sequence '\_'
     text = re.sub(r'_', '\_', text) # Escape underscores in display text
     [NbConvertApp] Converting notebook __script__.ipynb to html
-    [NbConvertApp] Writing 382981 bytes to __results__.html
+    [NbConvertApp] Writing 369059 bytes to __results__.html
   Kaggle video failed: Kaggle finished without clips (status: saisrehan1/telugu-reel-video has status "KernelWorkerStatus.ERROR")
 No scene could be animated (see the video lines above). Skipping this run; the next run will try again.
 Animated short not made this run; nothing posted. The next scheduled run will try again.
