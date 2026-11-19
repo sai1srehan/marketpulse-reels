@@ -57,7 +57,8 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           AI_STORIES: ${{ vars.AI_STORIES }}
           REQUIRE_CLIPS: ${{ vars.REQUIRE_CLIPS || '0' }}
-          PIXAR_STORIES: ${{ vars.PIXAR_STORIES || '0' }}
+          # animated shorts are ON by default; works as a repository Variable or a Secret (set to 0 for the old cartoon engine)
+          PIXAR_STORIES: ${{ vars.PIXAR_STORIES || secrets.PIXAR_STORIES || '1' }}
           PIXAR_FORMAT: ${{ vars.PIXAR_FORMAT || 'short' }}
           SHORT_REQUIRE_MOTION: ${{ vars.SHORT_REQUIRE_MOTION || '1' }}
           PIXAR_CLIPS: ${{ vars.PIXAR_CLIPS || '0' }}
