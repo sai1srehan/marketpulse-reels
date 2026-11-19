@@ -60,7 +60,8 @@ jobs:
           # animated shorts are ON by default; works as a repository Variable or a Secret (set to 0 for the old cartoon engine)
           PIXAR_STORIES: ${{ vars.PIXAR_STORIES || secrets.PIXAR_STORIES || '1' }}
           PIXAR_FORMAT: ${{ vars.PIXAR_FORMAT || 'short' }}
-          SHORT_REQUIRE_MOTION: ${{ vars.SHORT_REQUIRE_MOTION || '0' }}
+          # 1 = post only real animation (skip the run when the free GPU quota is used up); 0 = post moving pictures instead
+          SHORT_REQUIRE_MOTION: ${{ vars.SHORT_REQUIRE_MOTION || '1' }}
           SHORT_BEATS: ${{ vars.SHORT_BEATS || '4' }}
           SHORT_STEPS: ${{ vars.SHORT_STEPS || '4' }}
           PIXAR_CLIPS: ${{ vars.PIXAR_CLIPS || '0' }}

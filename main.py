@@ -211,11 +211,16 @@ def llm_json_text(prompt):
     if gemini_key():
         for model in list(gemini_models()):
             try:
-                r = requests.post(f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
-                                  headers={"x-goog-api-key": gemini_key(), "Content-Type": "application/json"},
-                                  json={"contents": [{"role": "user", "parts": [{"text": prompt}]}],
-                                        "generationConfig": {"responseMimeType": "application/json", "temperature": 1.0,
-                                                             "maxOutputTokens": 8192}}, timeout=180)
+                for wait in (0, 20, 40):   # 500/503 "high demand" is temporary: wait and retry the same model
+                    time.sleep(wait)
+                    r = requests.post(f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+                                      headers={"x-goog-api-key": gemini_key(), "Content-Type": "application/json"},
+                                      json={"contents": [{"role": "user", "parts": [{"text": prompt}]}],
+                                            "generationConfig": {"responseMimeType": "application/json", "temperature": 1.0,
+                                                                 "maxOutputTokens": 8192}}, timeout=180)
+                    if r.status_code not in (500, 503):
+                        break
+                    print(f"Gemini {model} busy ({r.status_code}), retrying")
                 if r.status_code == 404:
                     print(f"Gemini model {model} not available, trying the next one")
                     continue
