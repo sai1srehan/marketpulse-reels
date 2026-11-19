@@ -2352,12 +2352,27 @@ def generate_pixar_short(state, ig_titles):
             last_frame(clip, nxt)
             src = nxt
         if not clips:
-            if os.getenv("SHORT_REQUIRE_MOTION", "1") == "1":
+            if os.getenv("SHORT_REQUIRE_MOTION", "0") == "1":
                 print("No beat could be animated (free quota or Space down). Skipping this run; the next run will try again.")
                 return False
-            clip = d / "beat1.mp4"   # opt-in fallback: camera move over the keyframe
-            still_to_clip(key, clip, 10, "in")
-            clips.append(clip)
+            # still post the full narrated story: one Pixar picture per scene with a camera move
+            print("No scene could be animated (free GPU quota used up): making the story with moving Pixar pictures instead.")
+            prev = key
+            for i, beat in enumerate(idea["beats"]):
+                still = prev
+                if i > 0:
+                    try:
+                        new = d / f"still{i + 1}.png"
+                        free_image(f"{beat} The ONLY characters in the picture: {looks}. No other people or animals. "
+                                   f"{PIXAR_STILL}.", seed, new)   # same seed keeps the look closer between scenes
+                        cover_fit(new)
+                        still = prev = new
+                    except Exception as e:
+                        print(f"  scene {i + 1} picture failed ({str(e)[:150]}); reusing the previous one")
+                clip = d / f"beat{i + 1}.mp4"
+                still_to_clip(still, clip, 10, CAMERA_MOVES[i % len(CAMERA_MOVES)])
+                clips.append(clip)
+                print(f"  scene {i + 1}/{len(idea['beats'])} made with a camera move")
         k = len(clips)
         lens = [media_seconds(c) for c in clips]
         # the story: narration line i is spoken during beat i and the moral closes the reel (no text on screen)
@@ -2880,6 +2895,33 @@ if __name__ == "__main__":
                 make_pixar_clips(st, force="--force" in sys.argv)
         sys.exit(0)
     if cmd in ("generate", "all"):
-        generate()
+        # keep a copy of this run's output in state/last_run.log (committed by the workflow) so problems can be
+        # diagnosed without access to the Actions logs. Only story text and status lines are printed, never tokens.
+        class _Tee:
+            def __init__(self, *s):
+                self.s = s
+
+            def write(self, x):
+                for f in self.s:
+                    f.write(x)
+
+            def flush(self):
+                for f in self.s:
+                    f.flush()
+
+            def __getattr__(self, name):   # encoding, isatty, fileno... come from the real console
+                return getattr(self.s[0], name)
+        STATE.parent.mkdir(exist_ok=True)
+        _log = open(STATE.parent / "last_run.log", "w", encoding="utf-8")
+        _log.write(f"run at {dt.datetime.now(dt.timezone.utc).isoformat()} event={os.getenv('GITHUB_EVENT_NAME', 'local')}\n")
+        sys.stdout = _Tee(sys.__stdout__, _log)
+        try:
+            generate()
+        except Exception as e:
+            print(f"generate crashed: {e!r}"[:800])
+            raise
+        finally:
+            sys.stdout = sys.__stdout__
+            _log.close()
     if cmd in ("publish", "all"):
         publish()
