@@ -1,18 +1,10 @@
-run at 2026-11-19T07:21:11.225487+00:00 event=workflow_dispatch
+run at 2026-11-19T07:45:32.906013+00:00 event=schedule
 MODE: PIXAR_STORIES=1 MANUAL_VIDEOS=0 OMNI_VIDEOS=0 | story AI: Gemini | images: free Pollinations
-Gemini gemini-3.8-flash error: HTTPSConnectionPool(host='generativelanguage.googleapis.com', port=443): Read timed out. (read timeout=180)
-Gemini gemini-3.7-flash busy (503), retrying
-Gemini gemini-3.7-flash failed: 429 {
-  "error": {
-    "code": 429,
-    "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://aistudio.google.com/do
-Gemini gemini-3.6-flash busy (503), retrying
-Gemini gemini-3.6-flash error: HTTPSConnectionPool(host='generativelanguage.googleapis.com', port=443): Read timed out. (read timeout=180)
-Gemini model gemini-2.5-flash not available, trying the next one
-All Gemini models failed; using the free Pollinations text model instead.
-Story written by Pollinations (gpt-oss-20b, free)
-Short idea: మామిడిలో ముద్దు | Tiny bird with rainbow feathers, big bright eyes, playful wings | Sturdy mango tree with glossy green leaves, golden mangoes, gentle sway
-Story: ఆకాశపు తోటలో మామిడిపళ్ల ముసురు, మురువైపు నీడలలో తప్పిపోయిన చిన్న పిట్ట / అటు పక్కనే ఉన్న మామిడి చెట్టు, పెద్ద పండ్లు, నిర్మలమైన పళ్లతో మేడ పిలుస్తుంది / పిట్ట రంగురంగుల మామిడిపండును చూడగానే మొహం వంకరగా, చిలిపి కన్నులతో డాహ వేస్తుంది / అరుంగాల మామిడిపండు పూయినప్పుడు, పిట్ట సున్నితంగా పండు చుడి, ఆనందంగా పాటలు పాడుతుంది / నీతి: రూపంతో కాదు, హృదయంతో చూసి ఆనందం పొందాలి
+Story written by Gemini (gemini-3.8-flash)
+Short idea: బంటి ఇచ్చిన మాట | Banti, a tiny chubby emerald-green tree frog with huge sparkly amber eyes and a miniature lotus-seed satchel. | Chinnu, an adorable round buttercup-yellow duckling with oversized curious blue eyes and soft downy feathers.
+Story: చిన్నుకి ఇష్టమైన తామర రేకు దూరంగా వెళ్లిపోతుంటే, బంటి తెచ్చిస్తానని గట్టిగా మాట ఇచ్చాడు. / గాలి ఎంత ఎదురు వీచినా, బంటి నీటి అలలను దాటుతూ కష్టపడి ఆ పూరేకును చేతుల్లో పట్టుకున్నాడు. / మాట తప్పకూడదన్న పట్టుదలతో, ఆయాసపడుతూనే చెరువు గట్టున ఎదురుచూస్తున్న చిన్నారి చిన్ను దగ్గరకు ఆ రేకును తీసుకొచ్చాడు. / తన నేస్తం నమ్మకాన్ని నిలబెట్టినందుకు ఆనందంతో చిన్ను ప్రేమగా బంటిని గుండెలకు హత్తుకుని మురిసిపోయింది. / నీతి: మాట తప్పకుండా నిలబెట్టుకోవడమే స్నేహితుడికి మనం ఇచ్చే అత్యంత విలువైన కానుక.
+  image attempt 1 failed: 503 {"status":503,"success":false,"error":{"code":"SERVICE_UNAVAILABLE","message":"The Classic API is at its limit right now. Retry after 10s, or get full
+  waiting 45s for the free image tier
   opening keyframe via pollinations
   Kaggle push: ackages/kaggle/api/kaggle_api_extended.py", line 266, in <module>
     from ..models.upload_file import UploadFile
