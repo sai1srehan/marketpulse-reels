@@ -1714,7 +1714,7 @@ def write_prompts():
 # 3) saved as clips/<story id>/shotN.mp4, which the cinematic clip mode above already knows how to use
 PIXAR_STILL = ("Pixar-style 3D animated movie still, rounded 3D CGI render (not anime, not 2D), cute cartoon characters with "
                "big glossy expressive eyes, any people are wholesome kids in modest fully clothed kid-friendly outfits, "
-               "warm cinematic lighting, vibrant colours, soft depth of field, no text, no watermark")
+               "bright warm cinematic lighting, well-lit faces, vibrant colours, soft depth of field, no text, no watermark")
 SPECIES_EN = {
     "boy": "RAMU: a cheerful 8-year-old Indian boy with black hair, blue t-shirt and brown shorts.",
     "snake": "SNAKE: a friendly bright-green cartoon snake with big kind eyes.",
@@ -2223,7 +2223,8 @@ def animate_still(img, motion, out, seconds, seed):
     for space in VIDEO_SPACES:
         try:
             c = Client(space, token=tok, verbose=False)
-            res = c.predict(input_image=handle_file(str(img)), prompt=motion, negative_prompt=VIDEO_NEG, steps=6,
+            res = c.predict(input_image=handle_file(str(img)), prompt=motion, negative_prompt=VIDEO_NEG,
+                            steps=int(os.getenv("SHORT_STEPS", "4")),   # fewer steps = less of the free GPU quota per scene
                             duration_seconds=seconds, seed=seed, randomize_seed=False, api_name="/generate_video")
             vid = res[0] if isinstance(res, (list, tuple)) else res
             if isinstance(vid, dict):
@@ -2250,20 +2251,22 @@ def media_seconds(path):
 
 
 def short_concept(used_titles, used_morals):
-    """AI invents one original 15-second animated micro-story (Telugu caption + English image/motion prompts)."""
+    """AI invents one original animated micro-story (Telugu narration + English image/motion prompts)."""
     setting, theme = random.choice(PIXAR_INSPIRATION["setting"]), random.choice(PIXAR_INSPIRATION["theme"])
+    nb = max(2, min(8, int(os.getenv("SHORT_BEATS", "4"))))
+    secs = float(os.getenv("SHORT_BEAT_SECONDS", "5"))
     prompt = f"""You are the creative director of a Telugu Instagram Reels page that posts short, heart-touching or funny animated films.
-Invent ONE original 15-second Pixar-style 3D animated micro-story with a clear, positive, shareable message.
+Invent ONE original {int(nb * secs)}-second Pixar-style 3D animated micro-story with a clear, positive, shareable message.
 Cast: one or two cute, expressive personified characters (animals, birds, everyday objects, fruits, vegetables, toys...).
 Inspiration (you may reinterpret): setting near "{setting}", theme around "{theme}". Warm cinematic look.
 Rules: kid-friendly; no violence; no politics or religion; no real people; no brands; no famous or copyrighted characters.
 Do NOT reuse or imitate these titles: {json.dumps(used_titles[-40:], ensure_ascii=False)}
 and avoid these morals: {json.dumps(used_morals[-40:], ensure_ascii=False)}
 
-HOW IT IS MADE: one opening image, then 3 beats of 5 seconds. Each beat is animated from the LAST frame of the previous
+HOW IT IS MADE: one opening image, then {nb} beats of {secs:g} seconds. Each beat is animated from the LAST frame of the previous
 beat, so it is ONE continuous scene: same place, same characters, roughly the same camera. Each beat describes motion only:
-what the characters do, their facial expressions, and small effects (sparkles, wind, splash, glow). Keep the characters in frame.
-Beat 1 must already be surprising or emotional (no slow intro). Beat 3 is the warm or funny payoff.
+what the characters do, their facial expressions, and small effects (sparkles, wind, splash, glow). Keep the characters
+big in the frame and well lit. Beat 1 must already be surprising or emotional (no slow intro). The last beat is the warm or funny payoff.
 A Telugu storyteller narrates the reel: one "narration" sentence per beat, spoken while that beat plays, describing
 what happens so the viewer clearly follows a complete little story (beginning, problem, happy ending). Natural spoken
 Telugu like a grandmother telling a story, each sentence 8 to 14 words. Characters can have simple Telugu names.
@@ -2271,12 +2274,12 @@ The Telugu "caption" goes in the Instagram post text (not on the video): somethi
 
 Return ONLY JSON:
 {{"title": "short Telugu title",
-"narration": ["Telugu sentence for beat 1", "for beat 2", "for beat 3"],
+"narration": [exactly {nb} Telugu sentences, one per beat, in order],
 "caption": "Telugu post message (max 18 words, 1 or 2 emotional sentences, simple spoken Telugu)",
 "moral": "one Telugu sentence", "question": "one short Telugu question that invites a real comment",
 "characters": ["English look of each character: species/object, colours, size, big expressive eyes (one sentence each)"],
-"opening_image": "English image prompt: medium shot showing ALL characters together and fully visible, their pose and expression, the setting and lighting",
-"beats": ["English motion prompt for 0-5 s", "for 5-10 s", "for 10-15 s"],
+"opening_image": "English image prompt: close medium shot where ALL characters are large, together, fully visible and fill most of the frame, their pose and expression, a bright well-lit setting",
+"beats": [exactly {nb} English motion prompts, one per {secs:g}-second beat, in order],
 "tag": "one real English hashtag about the theme, e.g. #friendship", "hashtags": ["#kidsstories", "#moralstory"]}}
 LANGUAGE RULE: title, narration, caption, moral and question are Telugu; characters, opening_image and beats are ENGLISH only."""
     tries = 3 if (gemini_key() or anthropic_key()) else 5
@@ -2286,16 +2289,18 @@ LANGUAGE RULE: title, narration, caption, moral and question are Telugu; charact
             assert all(TELUGU_RE.search(str(raw.get(k, ""))) for k in ("title", "caption", "moral")), "Telugu fields missing"
             chars = [str(c).strip() for c in raw.get("characters", []) if len(str(c).strip()) > 10][:2]
             beats = [str(b).strip() for b in raw.get("beats", []) if len(str(b).strip()) > 15]
-            assert chars and len(beats) >= 3, "characters/beats missing"
+            assert chars and len(beats) >= 2, "characters/beats missing"
             narration = [str(x).strip() for x in raw.get("narration", []) if TELUGU_RE.search(str(x))]
-            assert len(narration) >= 3 and all(3 <= len(x.split()) <= 22 for x in narration[:3]), "narration missing or too long"
-            assert not any(LATIN_RE.search(x) for x in narration[:3] + [str(raw["moral"])]), "narration has English letters mixed in"
-            raw["narration"] = narration[:3]
+            m = min(len(beats), len(narration), nb)   # beats and narration lines must pair up
+            assert m >= 2 and all(3 <= len(x.split()) <= 22 for x in narration[:m]), "narration missing or too long"
+            assert not any(LATIN_RE.search(x) for x in narration[:m] + [str(raw["moral"])]), "narration has English letters mixed in"
+            raw["narration"] = narration[:m]
+            beats = beats[:m]
             assert len(str(raw.get("opening_image", ""))) > 30, "opening image prompt too short"
             assert not TELUGU_RE.search(" ".join(chars + beats) + str(raw["opening_image"])), "prompts must be English"
             if any(_sim(raw["title"], t) > 0.5 for t in used_titles) or any(_sim(raw["moral"], m_) > 0.5 for m_ in used_morals if m_):
                 raise ValueError("too similar to an earlier video")
-            raw["characters"], raw["beats"] = chars, beats[:3]
+            raw["characters"], raw["beats"] = chars, beats
             if str(raw.get("tag", "")).lower() in {"#englishtag", "#tag", "#hashtag"}:
                 raw["tag"] = ""
             return raw

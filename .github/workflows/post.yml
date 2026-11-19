@@ -61,6 +61,8 @@ jobs:
           PIXAR_STORIES: ${{ vars.PIXAR_STORIES || secrets.PIXAR_STORIES || '1' }}
           PIXAR_FORMAT: ${{ vars.PIXAR_FORMAT || 'short' }}
           SHORT_REQUIRE_MOTION: ${{ vars.SHORT_REQUIRE_MOTION || '1' }}
+          SHORT_BEATS: ${{ vars.SHORT_BEATS || '4' }}
+          SHORT_STEPS: ${{ vars.SHORT_STEPS || '4' }}
           PIXAR_CLIPS: ${{ vars.PIXAR_CLIPS || '0' }}
           PIXAR_CLIP_SECONDS: ${{ vars.PIXAR_CLIP_SECONDS || '10' }}
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
