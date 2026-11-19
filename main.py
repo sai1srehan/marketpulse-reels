@@ -2274,16 +2274,41 @@ from diffusers import AutoencoderKLWan, WanImageToVideoPipeline
 from diffusers.utils import export_to_video
 print("GPU:", torch.cuda.get_device_name(0), "| setup", round(time.time() - t0), "s", flush=True)
 dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
+# T4 (16 GB, no flash attention): prefer memory-efficient attention so the attention matrix is never materialised
+try:
+    torch.backends.cuda.enable_flash_sdp(False)
+    torch.backends.cuda.enable_mem_efficient_sdp(True)
+except Exception as e:
+    print("sdp setting skipped:", e)
 vae = AutoencoderKLWan.from_pretrained(JOB["model"], subfolder="vae", torch_dtype=torch.float32)
 pipe = WanImageToVideoPipeline.from_pretrained(JOB["model"], vae=vae, torch_dtype=dtype)
+try:   # keep weights in 8-bit (about half the memory), compute in 16-bit
+    pipe.transformer.enable_layerwise_casting(storage_dtype=torch.float8_e4m3fn, compute_dtype=dtype)
+    print("8-bit weight storage on", flush=True)
+except Exception as e:
+    print("8-bit weight storage unavailable:", e, flush=True)
 pipe.enable_model_cpu_offload()
+try:
+    pipe.vae.enable_tiling()
+except Exception as e:
+    print("vae tiling unavailable:", e)
 print("model loaded", round(time.time() - t0), "s", flush=True)
 img = Image.open(io.BytesIO(base64.b64decode(JOB["image"]))).convert("RGB").resize((JOB["width"], JOB["height"]))
 os.makedirs("/kaggle/working", exist_ok=True)
+n_frames = JOB["frames"]
 for i, prompt in enumerate(JOB["beats"], 1):
-    frames = pipe(image=img, prompt=prompt, negative_prompt=JOB["neg"], height=JOB["height"], width=JOB["width"],
-                  num_frames=JOB["frames"], guidance_scale=JOB["guidance"], num_inference_steps=JOB["steps"],
-                  generator=torch.Generator("cpu").manual_seed(JOB["seed"] + i)).frames[0]
+    for attempt in range(2):
+        try:
+            frames = pipe(image=img, prompt=prompt, negative_prompt=JOB["neg"], height=JOB["height"], width=JOB["width"],
+                          num_frames=n_frames, guidance_scale=JOB["guidance"], num_inference_steps=JOB["steps"],
+                          generator=torch.Generator("cpu").manual_seed(JOB["seed"] + i)).frames[0]
+            break
+        except torch.OutOfMemoryError:
+            torch.cuda.empty_cache()
+            if attempt or n_frames <= 49:
+                raise
+            n_frames = 49   # still about 3 s per scene
+            print("out of GPU memory: retrying with", n_frames, "frames", flush=True)
     export_to_video(frames, f"/kaggle/working/beat{i}.mp4", fps=JOB["fps"])
     last = frames[-1]
     img = last if isinstance(last, Image.Image) else Image.fromarray((np.clip(last, 0, 1) * 255).round().astype("uint8"))
@@ -2330,7 +2355,7 @@ def kaggle_animate(key_png, motions, seed, workdir):
     buf = io.BytesIO()
     Image.open(key_png).convert("RGB").resize((w, h), Image.LANCZOS).save(buf, "JPEG", quality=92)
     job = {"image": base64.b64encode(buf.getvalue()).decode(), "beats": motions, "neg": VIDEO_NEG, "seed": seed,
-           "width": w, "height": h, "fps": 24, "frames": int(os.getenv("KAGGLE_FRAMES", "121")),   # 121 frames = 5 s
+           "width": w, "height": h, "fps": 16, "frames": int(os.getenv("KAGGLE_FRAMES", "81")),   # 81 frames at 16 fps = 5 s
            "steps": int(os.getenv("KAGGLE_STEPS", "25")), "guidance": float(os.getenv("KAGGLE_GUIDANCE", "5")),
            "model": os.getenv("KAGGLE_MODEL", "Wan-AI/Wan2.2-TI2V-5B-Diffusers"),
            "budget": int(os.getenv("KAGGLE_BUDGET_MIN", "100")) * 60}
