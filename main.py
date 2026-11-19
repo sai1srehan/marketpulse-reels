@@ -2264,17 +2264,21 @@ HOW IT IS MADE: one opening image, then 3 beats of 5 seconds. Each beat is anima
 beat, so it is ONE continuous scene: same place, same characters, roughly the same camera. Each beat describes motion only:
 what the characters do, their facial expressions, and small effects (sparkles, wind, splash, glow). Keep the characters in frame.
 Beat 1 must already be surprising or emotional (no slow intro). Beat 3 is the warm or funny payoff.
-The Telugu "caption" is shown on screen at the top: something people want to send to a friend.
+A Telugu storyteller narrates the reel: one "narration" sentence per beat, spoken while that beat plays, describing
+what happens so the viewer clearly follows a complete little story (beginning, problem, happy ending). Natural spoken
+Telugu like a grandmother telling a story, each sentence 8 to 14 words. Characters can have simple Telugu names.
+The Telugu "caption" goes in the Instagram post text (not on the video): something people want to send to a friend.
 
 Return ONLY JSON:
 {{"title": "short Telugu title",
-"caption": "Telugu on-screen message (max 18 words, 1 or 2 emotional sentences, simple spoken Telugu)",
+"narration": ["Telugu sentence for beat 1", "for beat 2", "for beat 3"],
+"caption": "Telugu post message (max 18 words, 1 or 2 emotional sentences, simple spoken Telugu)",
 "moral": "one Telugu sentence", "question": "one short Telugu question that invites a real comment",
 "characters": ["English look of each character: species/object, colours, size, big expressive eyes (one sentence each)"],
 "opening_image": "English image prompt: medium shot showing ALL characters together and fully visible, their pose and expression, the setting and lighting",
 "beats": ["English motion prompt for 0-5 s", "for 5-10 s", "for 10-15 s"],
 "tag": "one real English hashtag about the theme, e.g. #friendship", "hashtags": ["#kidsstories", "#moralstory"]}}
-LANGUAGE RULE: title, caption, moral and question are Telugu; characters, opening_image and beats are ENGLISH only."""
+LANGUAGE RULE: title, narration, caption, moral and question are Telugu; characters, opening_image and beats are ENGLISH only."""
     tries = 3 if (gemini_key() or anthropic_key()) else 5
     for attempt in range(tries):
         try:
@@ -2283,6 +2287,10 @@ LANGUAGE RULE: title, caption, moral and question are Telugu; characters, openin
             chars = [str(c).strip() for c in raw.get("characters", []) if len(str(c).strip()) > 10][:2]
             beats = [str(b).strip() for b in raw.get("beats", []) if len(str(b).strip()) > 15]
             assert chars and len(beats) >= 3, "characters/beats missing"
+            narration = [str(x).strip() for x in raw.get("narration", []) if TELUGU_RE.search(str(x))]
+            assert len(narration) >= 3 and all(3 <= len(x.split()) <= 22 for x in narration[:3]), "narration missing or too long"
+            assert not any(LATIN_RE.search(x) for x in narration[:3] + [str(raw["moral"])]), "narration has English letters mixed in"
+            raw["narration"] = narration[:3]
             assert len(str(raw.get("opening_image", ""))) > 30, "opening image prompt too short"
             assert not TELUGU_RE.search(" ".join(chars + beats) + str(raw["opening_image"])), "prompts must be English"
             if any(_sim(raw["title"], t) > 0.5 for t in used_titles) or any(_sim(raw["moral"], m_) > 0.5 for m_ in used_morals if m_):
@@ -2307,6 +2315,7 @@ def generate_pixar_short(state, ig_titles):
         if not idea:
             return False
         print(f"Short idea: {idea['title']} | {' | '.join(idea['characters'])[:300]}")
+        print("Story: " + " / ".join(idea["narration"]) + f" / నీతి: {idea['moral']}")
         d = OUT / "short"
         d.mkdir(parents=True, exist_ok=True)
         for old in d.glob("*"):
@@ -2344,33 +2353,51 @@ def generate_pixar_short(state, ig_titles):
             clip = d / "beat1.mp4"   # opt-in fallback: camera move over the keyframe
             still_to_clip(key, clip, 10, "in")
             clips.append(clip)
-        # only really-animated beats are used (no frozen tail); a short result is slowed smoothly to >= SHORT_MIN_SECONDS
-        raw_len = sum(media_seconds(c) for c in clips)
-        stretch = max(1.0, min(1.7, float(os.getenv("SHORT_MIN_SECONDS", "8")) / max(0.1, raw_len)))
-        slow = f"setpts={stretch:.3f}*PTS,minterpolate=fps={FPS}:mi_mode=mci:mc_mode=aobmc:vsbmc=1," if stretch > 1.01 else ""
-        # join the beats at full 1080x1920
-        joined = d / "joined.mp4"
-        cmd = ["ffmpeg", "-y", "-loglevel", "error"]
-        for c in clips:
+        k = len(clips)
+        lens = [media_seconds(c) for c in clips]
+        # the story: narration line i is spoken during beat i and the moral closes the reel (no text on screen)
+        narr = idea["narration"]
+        lines = narr[:k] if k >= len(narr) else (narr[:k - 1] + [narr[-1]] if k > 1 else [narr[0]])  # quota ran out: jump to the ending
+        if os.getenv("SHORT_VOICEOVER", "1") == "1":
+            segs = [{"kind": "line", "spk": NARRATOR, "text": t} for t in lines]
+            segs.append({"kind": "moral", "spk": NARRATOR, "text": f"నీతి: {idea['moral']}"})
+            voice, starts, durs, _envs, total = make_voice(segs)
+            bounds = [0.0] + [max(0.5, starts[i] - 0.25) for i in range(1, k)] + [total]   # beat i spans its narration line
+        else:
+            total = sum(lens)
+            voice = np.zeros(int(total * SR), np.float32)
+            bounds = [0.0] + [sum(lens[:i + 1]) for i in range(k)]
+        mi = f"minterpolate=fps={FPS}:mi_mode=mci:mc_mode=aobmc:vsbmc=1,"
+        cmd, fc = ["ffmpeg", "-y", "-loglevel", "error"], ""
+        for i, c in enumerate(clips):
             cmd += ["-i", str(c)]
-        fc = "".join(f"[{i}:v]{slow}scale={W}:{H}:force_original_aspect_ratio=increase:flags=lanczos,crop={W}:{H},fps={FPS},"
-                     f"setsar=1,format=yuv420p[v{i}];" for i in range(len(clips)))
-        fc += "".join(f"[v{i}]" for i in range(len(clips))) + f"concat=n={len(clips)}:v=1:a=0[v]"
-        run(cmd + ["-filter_complex", fc, "-map", "[v]", "-c:v", "libx264", "-preset", "veryfast", "-crf", "18", str(joined)])
-        # music + a little sparkle; the Telugu narrator voice is added on top in finish_omni_video
-        dur = media_seconds(joined)
+            want = bounds[i + 1] - bounds[i]
+            f = want / max(0.1, lens[i])
+            if f <= 1.0:   # line is shorter than the beat: cut the beat
+                speed, pad = f"trim=duration={want:.3f},setpts=PTS-STARTPTS,", ""
+            else:          # line is longer: slow the beat smoothly (max 2.2x), hold the last frame for any rest
+                s = min(f, 2.2)
+                speed = f"setpts={s:.3f}*PTS,{mi}"
+                extra = want - lens[i] * s
+                pad = f",tpad=stop_mode=clone:stop_duration={extra:.3f}" if extra > 0.05 else ""
+            fc += (f"[{i}:v]{speed}scale={W}:{H}:force_original_aspect_ratio=increase:flags=lanczos,crop={W}:{H},"
+                   f"fps={FPS},setsar=1,format=yuv420p{pad}[v{i}];")
+        fc += "".join(f"[v{i}]" for i in range(k)) + f"concat=n={k}:v=1:a=0[v]"
+        joined = d / "joined.mp4"
+        run(cmd + ["-filter_complex", fc, "-map", "[v]", "-c:v", "libx264", "-preset", "veryfast", "-crf", "18",
+                   "-pix_fmt", "yuv420p", str(joined)])
+        # narration + music (ducked under the voice) + a little sparkle
         rng = random.Random(seed)
-        n = int(dur * SR)
-        music = get_music(dur, rng) * 2.4
+        n = len(voice)
+        music = get_music(n / SR, rng) * 1.6
         sfx = make_sfx([(0.05, "pop")], n, rng)
         wav = d / "audio.wav"
-        mix_audio(np.zeros(n, np.float32), music, sfx, wav)
-        raw = d / "raw.mp4"
+        mix_audio(voice, music, sfx, wav)
         run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(joined), "-i", str(wav), "-map", "0:v", "-map", "1:a",
-             "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-shortest", str(raw)])
-        # Telugu caption on top + narrator reading it (SHORT_VOICEOVER=0 for music only) + Instagram encode
-        finish_omni_video(raw, idea["caption"], OUT / "reel.mp4", voiceover=os.getenv("SHORT_VOICEOVER", "1") == "1")
-        print(f"Animated beats: {animated} of {len(idea['beats'])}, reel {media_seconds(OUT / 'reel.mp4'):.1f}s")
+             "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-ac", "2", "-shortest", "-movflags", "+faststart",
+             str(OUT / "reel.mp4")])
+        print(f"Animated beats: {animated} of {len(idea['beats'])}, narration lines: {len(lines)} + moral, "
+              f"reel {media_seconds(OUT / 'reel.mp4'):.1f}s")
     except Exception as e:
         print(f"Animated short failed: {str(e)[:500]}")
         return False
