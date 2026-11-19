@@ -2123,7 +2123,7 @@ def caption_png(text, width, size, path):
     return img.height
 
 
-def finish_omni_video(raw, caption, out_path):
+def finish_omni_video(raw, caption, out_path, voiceover=None):
     """Re-encode for Instagram (30 fps, H.264/AAC) and put the Telugu caption on top like the reference reel."""
     probe = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height",
                             "-of", "csv=s=x:p=0", str(raw)], capture_output=True, text=True).stdout.strip()
@@ -2134,7 +2134,9 @@ def finish_omni_video(raw, caption, out_path):
     audio = has_audio(raw)
     cmd = ["ffmpeg", "-y", "-loglevel", "error", "-i", str(raw), "-loop", "1", "-i", str(png)]
     voice = None
-    if os.getenv("OMNI_VOICEOVER") == "1":
+    if voiceover is None:
+        voiceover = os.getenv("OMNI_VOICEOVER") == "1"
+    if voiceover:
         mp3, voice = OUT / "omni_voice.mp3", OUT / "omni_voice.wav"
         tts(caption, mp3, NARRATOR)
         run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(mp3), "-ar", str(SR), "-ac", "1", "-c:a", "pcm_s16le", str(voice)])
@@ -2317,56 +2319,62 @@ def generate_pixar_short(state, ig_titles):
         cover_fit(key)
         print(f"  opening keyframe via {prov}")
         secs = float(os.getenv("SHORT_BEAT_SECONDS", "5"))
-        clips, src, animated, quota_out = [], key, 0, False
+        clips, src, animated = [], key, 0
         for i, beat in enumerate(idea["beats"]):
             clip = d / f"beat{i + 1}.mp4"
-            if not quota_out:
-                try:
-                    space = animate_still(src, f"{beat} The characters look exactly the same: {looks}. "
-                                               "Pixar-style 3D animation, smooth natural motion.", clip, secs, seed + i)
-                    animated += 1
-                    print(f"  beat {i + 1}/{len(idea['beats'])} animated via {space}")
-                except QuotaError as e:
-                    quota_out = True
-                    print(f"  free GPU quota used up: {e}")
-                except Exception as e:
-                    print(f"  beat {i + 1} animation failed: {str(e)[:300]}")
-            if not clip.exists():
-                if animated == 0 and os.getenv("SHORT_REQUIRE_MOTION", "1") == "1":
-                    print("No beat could be animated (free quota or Space down). Skipping this run; the next run will try again.")
-                    return False
-                still_to_clip(src, clip, secs, CAMERA_MOVES[i % len(CAMERA_MOVES)])   # keep the reel watchable
-                print(f"  beat {i + 1} uses a camera move instead")
+            try:
+                space = animate_still(src, f"{beat} The characters look exactly the same: {looks}. "
+                                           "Pixar-style 3D animation, smooth natural motion.", clip, secs, seed + i)
+                animated += 1
+                print(f"  beat {i + 1}/{len(idea['beats'])} animated via {space}")
+            except QuotaError as e:
+                print(f"  free GPU quota used up after {animated} beat(s): {e}")
+                break
+            except Exception as e:
+                print(f"  beat {i + 1} animation failed: {str(e)[:300]}")
+                break   # the next beat must start from this one's last frame, so stop the chain here
             clips.append(clip)
             nxt = d / f"last{i + 1}.png"
             last_frame(clip, nxt)
             src = nxt
+        if not clips:
+            if os.getenv("SHORT_REQUIRE_MOTION", "1") == "1":
+                print("No beat could be animated (free quota or Space down). Skipping this run; the next run will try again.")
+                return False
+            clip = d / "beat1.mp4"   # opt-in fallback: camera move over the keyframe
+            still_to_clip(key, clip, 10, "in")
+            clips.append(clip)
+        # only really-animated beats are used (no frozen tail); a short result is slowed smoothly to >= SHORT_MIN_SECONDS
+        raw_len = sum(media_seconds(c) for c in clips)
+        stretch = max(1.0, min(1.7, float(os.getenv("SHORT_MIN_SECONDS", "8")) / max(0.1, raw_len)))
+        slow = f"setpts={stretch:.3f}*PTS,minterpolate=fps={FPS}:mi_mode=mci:mc_mode=aobmc:vsbmc=1," if stretch > 1.01 else ""
         # join the beats at full 1080x1920
         joined = d / "joined.mp4"
         cmd = ["ffmpeg", "-y", "-loglevel", "error"]
         for c in clips:
             cmd += ["-i", str(c)]
-        fc = "".join(f"[{i}:v]scale={W}:{H}:force_original_aspect_ratio=increase:flags=lanczos,crop={W}:{H},fps={FPS},"
+        fc = "".join(f"[{i}:v]{slow}scale={W}:{H}:force_original_aspect_ratio=increase:flags=lanczos,crop={W}:{H},fps={FPS},"
                      f"setsar=1,format=yuv420p[v{i}];" for i in range(len(clips)))
         fc += "".join(f"[v{i}]" for i in range(len(clips))) + f"concat=n={len(clips)}:v=1:a=0[v]"
         run(cmd + ["-filter_complex", fc, "-map", "[v]", "-c:v", "libx264", "-preset", "veryfast", "-crf", "18", str(joined)])
-        # music + a little sparkle, no narration (like the reference reels)
+        # music + a little sparkle; the Telugu narrator voice is added on top in finish_omni_video
         dur = media_seconds(joined)
         rng = random.Random(seed)
         n = int(dur * SR)
         music = get_music(dur, rng) * 2.4
-        sfx = make_sfx([(0.05, "pop"), (max(0.1, dur - secs), "whoosh")], n, rng)
+        sfx = make_sfx([(0.05, "pop")], n, rng)
         wav = d / "audio.wav"
         mix_audio(np.zeros(n, np.float32), music, sfx, wav)
         raw = d / "raw.mp4"
         run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(joined), "-i", str(wav), "-map", "0:v", "-map", "1:a",
              "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-shortest", str(raw)])
-        finish_omni_video(raw, idea["caption"], OUT / "reel.mp4")   # Telugu caption on top + Instagram encode
-        print(f"Animated beats: {animated} of {len(clips)}")
+        # Telugu caption on top + narrator reading it (SHORT_VOICEOVER=0 for music only) + Instagram encode
+        finish_omni_video(raw, idea["caption"], OUT / "reel.mp4", voiceover=os.getenv("SHORT_VOICEOVER", "1") == "1")
+        print(f"Animated beats: {animated} of {len(idea['beats'])}, reel {media_seconds(OUT / 'reel.mp4'):.1f}s")
     except Exception as e:
         print(f"Animated short failed: {str(e)[:500]}")
         return False
-    return post_idea(idea, "short-", f"free animated short ({animated}/{len(clips)} beats animated)")
+    return post_idea(idea, "short-", f"free animated short ({animated}/{len(idea['beats'])} beats animated)")
 
 
 # -------------------------------- manual mode: you make the clip with your own Gemini plan, the bot does the rest
