@@ -2465,13 +2465,16 @@ def generate_pixar_short(state, ig_titles):
         clips, src, animated = [], key, 0
         motions = [f"{b} The characters look exactly the same: {looks}. Pixar-style 3D animation, smooth natural motion."
                    for b in idea["beats"]]
-        if kaggle_ready() and os.getenv("VIDEO_BACKEND", "auto") in ("auto", "kaggle"):
+        use_kaggle = kaggle_ready() and os.getenv("VIDEO_BACKEND", "auto") in ("auto", "kaggle")
+        if use_kaggle:   # Kaggle only: the Hugging Face Spaces are not used once Kaggle is set up
             try:
                 clips = kaggle_animate(key, motions, seed, d)
                 animated = len(clips)
             except Exception as e:
-                print(f"  Kaggle video failed: {str(e)[:500]}; trying the free Hugging Face Spaces instead")
-        for i, motion in enumerate(motions if not clips else []):
+                print(f"  Kaggle video failed: {str(e)[:500]}")
+        else:
+            print("  Kaggle is not set up (secrets KAGGLE_USERNAME + KAGGLE_API_TOKEN); using the free Hugging Face Spaces")
+        for i, motion in enumerate(motions if not use_kaggle else []):
             clip = d / f"beat{i + 1}.mp4"
             try:
                 space = animate_still(src, motion, clip, secs, seed + i)
@@ -2489,7 +2492,7 @@ def generate_pixar_short(state, ig_titles):
             src = nxt
         if not clips:
             if os.getenv("SHORT_REQUIRE_MOTION", "0") == "1":
-                print("No beat could be animated (free quota or Space down). Skipping this run; the next run will try again.")
+                print("No scene could be animated (see the video lines above). Skipping this run; the next run will try again.")
                 return False
             # still post the full narrated story: one Pixar picture per scene with a camera move
             print("No scene could be animated (free GPU quota used up): making the story with moving Pixar pictures instead.")
