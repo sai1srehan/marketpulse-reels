@@ -2280,26 +2280,48 @@ try:
     torch.backends.cuda.enable_mem_efficient_sdp(True)
 except Exception as e:
     print("sdp setting skipped:", e)
+import gc
 vae = AutoencoderKLWan.from_pretrained(JOB["model"], subfolder="vae", torch_dtype=torch.float32)
 pipe = WanImageToVideoPipeline.from_pretrained(JOB["model"], vae=vae, torch_dtype=dtype)
-try:   # keep weights in 8-bit (about half the memory), compute in 16-bit
+print("model loaded to RAM", round(time.time() - t0), "s", flush=True)
+# 1) the big text encoder alone on the GPU: encode every prompt once, then remove it completely
+pipe.text_encoder.to("cuda")
+EMBEDS = []
+with torch.no_grad():
+    for p in JOB["beats"]:
+        pe, ne = pipe.encode_prompt(prompt=p, negative_prompt=JOB["neg"], do_classifier_free_guidance=True, device="cuda")
+        EMBEDS.append((pe.cpu(), ne.cpu()))
+pipe.text_encoder.to("cpu")
+pipe.text_encoder = None
+gc.collect()
+torch.cuda.empty_cache()
+print("prompts encoded", round(time.time() - t0), "s | GPU free GB:",
+      round(torch.cuda.mem_get_info()[0] / 1e9, 1), flush=True)
+# 2) only the video transformer (8-bit storage, 16-bit compute) and the VAE on the GPU
+try:
     pipe.transformer.enable_layerwise_casting(storage_dtype=torch.float8_e4m3fn, compute_dtype=dtype)
     print("8-bit weight storage on", flush=True)
 except Exception as e:
     print("8-bit weight storage unavailable:", e, flush=True)
-pipe.enable_model_cpu_offload()
+pipe.transformer.to("cuda")
+pipe.vae.to("cuda")
+if getattr(pipe, "image_encoder", None) is not None:
+    pipe.image_encoder.to("cuda")
 try:
     pipe.vae.enable_tiling()
 except Exception as e:
     print("vae tiling unavailable:", e)
-print("model loaded", round(time.time() - t0), "s", flush=True)
+print("video model on GPU", round(time.time() - t0), "s | GPU free GB:",
+      round(torch.cuda.mem_get_info()[0] / 1e9, 1), flush=True)
 img = Image.open(io.BytesIO(base64.b64decode(JOB["image"]))).convert("RGB").resize((JOB["width"], JOB["height"]))
 os.makedirs("/kaggle/working", exist_ok=True)
 n_frames = JOB["frames"]
 for i, prompt in enumerate(JOB["beats"], 1):
     for attempt in range(2):
         try:
-            frames = pipe(image=img, prompt=prompt, negative_prompt=JOB["neg"], height=JOB["height"], width=JOB["width"],
+            pe, ne = EMBEDS[i - 1]
+            frames = pipe(image=img, prompt_embeds=pe.to("cuda"), negative_prompt_embeds=ne.to("cuda"),
+                          height=JOB["height"], width=JOB["width"],
                           num_frames=n_frames, guidance_scale=JOB["guidance"], num_inference_steps=JOB["steps"],
                           generator=torch.Generator("cpu").manual_seed(JOB["seed"] + i)).frames[0]
             break
