@@ -1,51 +1,50 @@
-run at 2026-11-20T10:26:09.237316+00:00 event=workflow_dispatch
+run at 2026-11-20T13:30:50.257704+00:00 event=schedule
 MODE: PIXAR_STORIES=1 MANUAL_VIDEOS=0 OMNI_VIDEOS=0 | story AI: Gemini | images: free Pollinations
+Gemini gemini-3.8-flash busy (503), retrying
 Gemini gemini-3.8-flash error: HTTPSConnectionPool(host='generativelanguage.googleapis.com', port=443): Read timed out. (read timeout=100)
 Gemini gemini-3.7-flash error: HTTPSConnectionPool(host='generativelanguage.googleapis.com', port=443): Read timed out. (read timeout=100)
 Story written by Gemini (gemini-3.6-flash)
-Short idea: చింటూ చేసిన తీపి సాయం | Chintu: A cute little bright orange squirrel with big sparkling black eyes, wearing a tiny blue baseball cap. | Kaka Taata: An old gentle grey crow with soft feathers and big expressive eyes, wearing round silver spectacles and a red knitted scarf.
-Story: మామిడి తోటలో వృద్ధ కాకి తాత చెట్టుపై పండు అందుకోలేక తీవ్రంగా శ్రమిస్తున్నాడు. / అది చూసిన చిన్ని ఉడుత చింటూ వెంటనే చెట్టు ఎక్కి ఆ పండు కోసింది. / చింటూ ఆ మామిడి పండును జాగ్రత్తగా తాతగారి బుట్టలో మెల్లగా దించింది. / తాత చింటూను ఆప్యాయంగా నిమిరి తియ్యని పండు ముక్కను ప్రేమతో పంచుకున్నాడు. / నీతి: పెద్దల అవసరాలను గమనించి సహాయపడటం మన బాధ్యత మరియు నిజమైన సంతోషం.
+Short idea: నది ఒడ్డున తాతయ్య బండి | A cute fluffy brown otter with big expressive brown eyes, wearing a bright yellow baseball cap. | An elderly turquoise tortoise with a gentle wrinkled face and kind dark eyes, wearing a warm red scarf.
+Story: నది ఒడ్డున ఒక ముసలి తాబేలు పండ్ల బండిని లాగలేక చాలా కష్టపడుతోంది. / అది చూసిన బుజ్జి ఉడుత పరుగెత్తుకుంటూ వచ్చి వెనుక నుండి బండిని నెట్టడం మొదలుపెట్టింది. / ఇద్దరూ కలిసి పట్టుదలతో శ్రమించి బండిని కొండపైకి విజయవంతంగా చేర్చగలిగారు. / ఆనందంతో తాతయ్య తాబేలు ఉడుతకు తియ్యని మామిడి పండును బహుమతిగా ఇచ్చింది. / నీతి: పెద్దలకు ఇచ్చే చిన్న సహాయం మన జీవితంలో ఎంతో తీపి జ్ఞాపకంగా మిగిలిపోతుంది.
   scene 1 picture via pollinations
-  waiting 42s for the free image tier
-  scene 2 picture ready
-  waiting 42s for the free image tier
-  scene 3 picture ready
   waiting 41s for the free image tier
+  scene 2 picture ready
+  waiting 41s for the free image tier
+  scene 3 picture ready
+  waiting 42s for the free image tier
   scene 4 picture ready
-  Kaggle push: Kernel version 9 successfully pushed.  Please check progress at https://www.kaggle.com/code/saisrehan1/telugu-reel-video
-  Kaggle GPU working... 1 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle push: Kernel version 10 successfully pushed.  Please check progress at https://www.kaggle.com/code/saisrehan1/telugu-reel-video
+  Kaggle GPU working... 1 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
   Kaggle GPU working... 2 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
   Kaggle GPU working... 4 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
   Kaggle GPU working... 5 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
   Kaggle GPU working... 7 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
   Kaggle GPU working... 8 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 10 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 11 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
   Kaggle finished: saisrehan1/telugu-reel-video has status "KernelWorkerStatus.COMPLETE"
   Kaggle notebook log (last lines):
-    GPUs: 2 x Tesla T4 | setup 79 s
+    GPUs: 2 x Tesla T4 | setup 56 s
     scene size 544 x 960
-    [transformers] Token indices sequence length is longer than the specified maximum sequence length for this model (235 > 77). Running this sequence through the model will result in indexing errors
-    [transformers] Token indices sequence length is longer than the specified maximum sequence length for this model (235 > 77). Running this sequence through the model will result in indexing errors
+    [transformers] Token indices sequence length is longer than the specified maximum sequence length for this model (223 > 77). Running this sequence through the model will result in indexing errors
+    [transformers] Token indices sequence length is longer than the specified maximum sequence length for this model (223 > 77). Running this sequence through the model will result in indexing errors
     long prompt failed, using the short form: 'EmbeddingsProviderMulti' object has no attribute 'empty_z'
     long prompt failed, using the short form: 'EmbeddingsProviderMulti' object has no attribute 'empty_z'
     long prompt failed, using the short form: 'EmbeddingsProviderMulti' object has no attribute 'empty_z'
     long prompt failed, using the short form: 'EmbeddingsProviderMulti' object has no attribute 'empty_z'
-    start pictures made on the GPU: 4 at 176 s
-    prompts encoded 258 s
+    start pictures made on the GPU: 4 at 152 s
+    prompts encoded 238 s
     [gpu0] video model on GPU, free GB: 7.4 | scenes [1, 3]
     [gpu0] out of GPU memory: retrying with 49 frames
     [gpu0] Traceback (most recent call last):
     [gpu0] File "/tmp/worker.py", line 44, in <module>
     [gpu0] frames = pipe(image=img, prompt_embeds=pe.to("cuda"), negative_prompt_embeds=ne.to("cuda"), height=H, width=W,
-    [gpu0] torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 3.93 GiB. GPU 0 has a total capacity of 14.56 GiB of which 1.60 GiB is free. Process 7 has 184.00 MiB memory in use. Including non-
+    [gpu0] torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 3.93 GiB. GPU 0 has a total capacity of 14.56 GiB of which 1.61 GiB is free. Process 7 has 182.00 MiB memory in use. Including non-
     [gpu1] video model on GPU, free GB: 7.6 | scenes [2, 4]
     [gpu1] out of GPU memory: retrying with 49 frames
     [gpu1] Traceback (most recent call last):
     [gpu1] File "/tmp/worker.py", line 44, in <module>
     [gpu1] frames = pipe(image=img, prompt_embeds=pe.to("cuda"), negative_prompt_embeds=ne.to("cuda"), height=H, width=W,
     [gpu1] torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 3.93 GiB. GPU 0 has a total capacity of 14.56 GiB of which 1.78 GiB is free. Including non-PyTorch memory, this process has 12.78 G
-    workers finished with exit codes [1, 1] at 603 s
+    workers finished with exit codes [1, 1] at 573 s
   Kaggle video failed: Kaggle finished without clips (status: saisrehan1/telugu-reel-video has status "KernelWorkerStatus.COMPLETE")
 No scene could be animated (see the video lines above). Skipping this run; the next run will try again.
 Animated short not made this run; nothing posted. The next scheduled run will try again.
