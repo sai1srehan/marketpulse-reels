@@ -2320,7 +2320,11 @@ if JOB.get("image_model"):
                 try:
                     c, pc = cp(p)
                     nc, npc = cp(JOB["image_neg"])
-                    c, nc = cp.pad_conditioning_tensors_to_same_length([c, nc])
+                    e, _ = cp("")   # pad the shorter one with empty-prompt chunks (77 tokens each)
+                    while c.shape[1] < nc.shape[1]:
+                        c = torch.cat([c, e], 1)
+                    while nc.shape[1] < c.shape[1]:
+                        nc = torch.cat([nc, e], 1)
                     kw = dict(prompt_embeds=c, pooled_prompt_embeds=pc, negative_prompt_embeds=nc, negative_pooled_prompt_embeds=npc)
                 except Exception as e:
                     print("long prompt failed, using the short form:", e, flush=True)
@@ -2384,29 +2388,54 @@ try:
 except Exception as e:
     print("vae tiling unavailable:", e)
 print("video model on GPU, free GB:", round(torch.cuda.mem_get_info()[0] / 1e9, 1), "| scenes", [i + 1 for i in idx], flush=True)
+import gc, traceback
+def decode(lat):
+    # the 5B video model leaves the GPU while the VAE turns latents into frames (the decode needs several GB)
+    pipe.transformer.to("cpu")
+    gc.collect()
+    torch.cuda.empty_cache()
+    try:
+        with torch.no_grad():
+            lat = lat.to("cuda", pipe.vae.dtype)
+            mean = torch.tensor(pipe.vae.config.latents_mean).view(1, pipe.vae.config.z_dim, 1, 1, 1).to(lat.device, lat.dtype)
+            std = 1.0 / torch.tensor(pipe.vae.config.latents_std).view(1, pipe.vae.config.z_dim, 1, 1, 1).to(lat.device, lat.dtype)
+            video = pipe.vae.decode(lat / std + mean, return_dict=False)[0]
+            return pipe.video_processor.postprocess_video(video, output_type="pil")[0]
+    finally:
+        pipe.transformer.to("cuda")
 W, H, last_dur = JOB["width"], JOB["height"], 0
+tries = []
+for t in [(W, H, JOB["frames"]), (480, 832, JOB["frames"]), (480, 832, 49)]:
+    if t not in tries:
+        tries.append(t)
 for i in idx:
     now = time.time() - JOB["t0"]
     if last_dur and now + last_dur > JOB["budget"]:
         print("time budget reached, skipping scene", i + 1, flush=True)
         break
     b0 = time.time()
-    img = Image.open(io.BytesIO(base64.b64decode(JOB["images"][min(i, len(JOB["images"]) - 1)]))).convert("RGB")
-    img = img.resize((W, H), Image.LANCZOS)
+    src = Image.open(io.BytesIO(base64.b64decode(JOB["images"][min(i, len(JOB["images"]) - 1)]))).convert("RGB")
     pe, ne = EMBEDS[i]
-    n_frames = JOB["frames"]
-    for attempt in range(2):
+    frames = None
+    for (w, h, nf) in list(tries):
         try:
-            frames = pipe(image=img, prompt_embeds=pe.to("cuda"), negative_prompt_embeds=ne.to("cuda"), height=H, width=W,
-                          num_frames=n_frames, guidance_scale=JOB["guidance"], num_inference_steps=JOB["steps"],
-                          generator=torch.Generator("cpu").manual_seed(JOB["seed"] + i)).frames[0]
+            lat = pipe(image=src.resize((w, h), Image.LANCZOS), prompt_embeds=pe.to("cuda"),
+                       negative_prompt_embeds=ne.to("cuda"), height=h, width=w, num_frames=nf,
+                       guidance_scale=JOB["guidance"], num_inference_steps=JOB["steps"], output_type="latent",
+                       generator=torch.Generator("cpu").manual_seed(JOB["seed"] + i)).frames
+            frames = decode(lat)
             break
         except torch.OutOfMemoryError:
+            where = " <- ".join("%s:%d %s" % (f.filename.split("/")[-1], f.lineno, f.name)
+                                for f in reversed(traceback.extract_tb(sys.exc_info()[2])[-4:]))
+            print("out of GPU memory at %dx%d, %d frames (in %s)" % (w, h, nf, where), flush=True)
+            lat = None
+            gc.collect()
             torch.cuda.empty_cache()
-            if attempt or n_frames <= 49:
-                raise
-            n_frames = 49
-            print("out of GPU memory: retrying with", n_frames, "frames", flush=True)
+            tries.remove((w, h, nf))   # never try a size that already failed again
+    if frames is None:
+        print("scene", i + 1, "failed at every size", flush=True)
+        continue
     export_to_video(frames, "/kaggle/working/beat%d.mp4" % (i + 1), fps=JOB["fps"])
     last_dur = time.time() - b0
     print("scene %d done in %d s (at %d s)" % (i + 1, last_dur, time.time() - JOB["t0"]), flush=True)
