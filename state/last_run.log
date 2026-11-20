@@ -1,11 +1,24 @@
-run at 2026-11-20T01:35:30.308362+00:00 event=schedule
+run at 2026-11-20T07:39:01.780458+00:00 event=schedule
 MODE: PIXAR_STORIES=1 MANUAL_VIDEOS=0 OMNI_VIDEOS=0 | story AI: Gemini | images: free Pollinations
 Gemini gemini-3.8-flash error: HTTPSConnectionPool(host='generativelanguage.googleapis.com', port=443): Read timed out. (read timeout=100)
-Story written by Gemini (gemini-3.7-flash)
-Short idea: నదీ ఒడ్డున వెచ్చని చేయూత | Bujji is a tiny, adorable river otter pup with sleek chestnut-brown fur, a creamy belly, and huge sparkling amber eyes full of innocent joy. | Rangayya is a gentle, elderly green river turtle with soft wrinkles, delicate wire spectacles, and an intricately carved mossy shell.
-Story: నదీ తీరపు సంతలో బరువైన పూల బుట్టను మోయలేక రంగయ్య తాత ఎంతో అలసిపోయాడు. / అది చూసిన బుజ్జి ఏమాత్రం ఆలోచించకుండా పరుగున వెళ్లి ఆ బుట్టను వెనుక నుంచి నెట్టాడు. / ఇద్దరి ప్రయత్నంతో ఆ బుట్ట సులభంగా పైకి చేరగానే, తాతయ్య కళ్లలో ఎంతో సంతోషం కనిపించింది. / తాతయ్య ప్రేమగా ఒక గులాబీ పువ్వు ఇవ్వగా, బుజ్జి ఆనందంతో ఆయనను ఆప్యాయంగా హత్తుకున్నాడు. / నీతి: వృద్ధులకు మనం అందించే చిన్న చేయూత వారి మనసుకి ఎంతో సాంత్వన చేకూరుస్తుంది.
+Gemini gemini-3.7-flash error: HTTPSConnectionPool(host='generativelanguage.googleapis.com', port=443): Read timed out. (read timeout=100)
+Gemini gemini-3.6-flash error: HTTPSConnectionPool(host='generativelanguage.googleapis.com', port=443): Read timed out. (read timeout=100)
+Gemini gemini-3.5-flash-lite busy (503), retrying
+Gemini gemini-3.5-flash-lite busy (503), retrying
+Gemini gemini-3.5-flash-lite busy (503), retrying
+Gemini gemini-3.5-flash-lite failed: 503 {
+  "error": {
+    "code": 503,
+    "message": "This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.",
+    "status": "UNAVAILABLE"
+  }
+}
+
+Story written by Gemini (gemini-3.1-flash-lite)
+Short idea: నది ఒడ్డున మధుర జ్ఞాపకం | A tiny, fuzzy light-brown mouse with large, expressive eyes and wearing a small leaf apron. | A small, energetic black ant with big bright eyes and tiny hands carrying a miniature leaf basket.
+Story: నది ఒడ్డున పండ్ల వ్యాపారి బుజ్జి ఎలుక, అలసిపోయిన బాటసారి చీమకు ఒక తీపి పండును ఇచ్చింది. / ఆ పండును అందుకున్న చీమ, తన కృతజ్ఞతను తెలుపుతూ ఒక మెరిసే పూల రేకును ఎలుకకు కానుకగా ఇచ్చింది. / ఇద్దరు స్నేహితులు నది ఒడ్డున కలిసి ఆ పండును పంచుకుంటూ కడుపు నిండా ఆనందంగా తింటున్నారు. / చిన్న సాయం చేసినా కృతజ్ఞతతో మెలిగితే మనసుకి ఎంతో తృప్తిగా ఉంటుందని వారు గ్రహించారు. / నీతి: పొందిన సహాయానికి కృతజ్ఞత చూపడం మన సంస్కారం.
   opening keyframe via pollinations
-  Kaggle push: Kernel version 7 successfully pushed.  Please check progress at https://www.kaggle.com/code/saisrehan1/telugu-reel-video
+  Kaggle push: Kernel version 8 successfully pushed.  Please check progress at https://www.kaggle.com/code/saisrehan1/telugu-reel-video
   Kaggle GPU working... 1 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
   Kaggle GPU working... 2 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
   Kaggle GPU working... 4 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
@@ -55,7 +68,7 @@ Story: నదీ తీరపు సంతలో బరువైన పూల �
   Kaggle GPU working... 70 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
   Kaggle GPU working... 71 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
   Kaggle GPU working... 73 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 75 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 74 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
   Kaggle GPU working... 76 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
   Kaggle GPU working... 78 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
   Kaggle GPU working... 79 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
@@ -81,26 +94,21 @@ Story: నదీ తీరపు సంతలో బరువైన పూల �
   Kaggle GPU working... 109 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
   Kaggle GPU working... 111 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
   Kaggle GPU working... 112 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 114 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 115 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 117 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 118 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 120 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
   Kaggle finished: saisrehan1/telugu-reel-video has status "KernelWorkerStatus.COMPLETE"
   Kaggle notebook log (last lines):
-    92%|█████████▏| 23/25 [22:15<01:55, 57.99s/it]
-    96%|█████████▌| 24/25 [23:13<00:57, 57.99s/it]
-    100%|██████████| 25/25 [24:11<00:00, 58.01s/it]
-    100%|██████████| 25/25 [24:11<00:00, 58.07s/it]
-    beat 4/4 done at 7201 s
+    92%|█████████▏| 23/25 [20:45<01:48, 54.19s/it]
+    96%|█████████▌| 24/25 [21:39<00:54, 54.20s/it]
+    100%|██████████| 25/25 [22:34<00:00, 54.20s/it]
+    100%|██████████| 25/25 [22:34<00:00, 54.16s/it]
+    beat 4/4 done at 6772 s
     time budget reached, stopping early
     /usr/local/lib/python3.13/dist-packages/mistune.py:435: SyntaxWarning: invalid escape sequence '\|'
     cells[i][c] = re.sub('\\\\\|', '|', cell)
     /usr/local/lib/python3.13/dist-packages/nbconvert/filters/filter_links.py:36: SyntaxWarning: invalid escape sequence '\_'
     text = re.sub(r'_', '\_', text) # Escape underscores in display text
     [NbConvertApp] Converting notebook __script__.ipynb to html
-    [NbConvertApp] Writing 429588 bytes to __results__.html
-  Kaggle made 4 animated scene(s) in 121 min
+    [NbConvertApp] Writing 358520 bytes to __results__.html
+  Kaggle made 4 animated scene(s) in 114 min
 Music: synthesized playful instrumental
-Animated beats: 4 of 4, narration lines: 4 + moral, reel 31.3s
-Built out/reel.mp4 with free animated short (4/4 beats animated) (16.9 MB)
+Animated beats: 4 of 4, narration lines: 4 + moral, reel 30.5s
+Built out/reel.mp4 with free animated short (4/4 beats animated) (11.1 MB)
