@@ -1,24 +1,45 @@
-run at 2026-11-22T07:30:35.724614+00:00 event=schedule
+run at 2026-11-22T13:16:21.521748+00:00 event=schedule
 MODE: PIXAR_STORIES=1 MANUAL_VIDEOS=0 OMNI_VIDEOS=0 | story AI: Gemini | images: free Pollinations
+Gemini gemini-3.8-flash busy (503), retrying
+Gemini gemini-3.8-flash busy (503), retrying
 Gemini gemini-3.8-flash error: HTTPSConnectionPool(host='generativelanguage.googleapis.com', port=443): Read timed out. (read timeout=100)
-Gemini gemini-3.7-flash error: HTTPSConnectionPool(host='generativelanguage.googleapis.com', port=443): Read timed out. (read timeout=100)
-Story written by Gemini (gemini-3.6-flash)
-Short idea: మంచు కొండల్లో మధురమైన కృతజ్ఞత | Bujji: A tiny fluffy orange red panda with big expressive black eyes, wearing a vibrant green knit scarf. | Giri: A soft chubby white baby yak with big gentle dark eyes, wearing a bright yellow woolen beanie cap.
-Story: మంచు కురుస్తున్న వేళ చిన్న ఎర్ర పండా తన వేడి దుంపను కింద పడేసాడు. / బుజ్జి య్యాక్ తన వెచ్చని ఊపిరితో ఆ దుంపపై ఉన్న మంచును కరిగించాడు. / ఎంతో ఆనందంతో ఆ పండా సగం దుంపను య్యాక్ కి తినిపించి కృతజ్ఞత తెలిపాడు. / ఇద్దరు మిత్రులు ఒకరికొకరు ధన్యవాదాలు చెప్పుకుంటూ ప్రశాంతంగా ఆ రాత్రిని గడిపారు. / నీతి: మనకు లభించిన చిన్న మేలును కూడా గుర్తుంచుకోవడమే నిజమైన సంతోషం.
-  scene 1 picture via pollinations
-  waiting 42s for the free image tier
+Gemini gemini-3.7-flash busy (503), retrying
+Gemini gemini-3.7-flash busy (503), retrying
+Gemini gemini-3.7-flash busy (503), retrying
+Gemini gemini-3.7-flash failed: 503 {
+  "error": {
+    "code": 503,
+    "message": "This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.",
+    "status": "UNAVAILABLE"
+  }
+}
+
+Gemini gemini-3.6-flash busy (503), retrying
+Gemini gemini-3.6-flash busy (503), retrying
+Gemini gemini-3.6-flash busy (503), retrying
+Gemini gemini-3.6-flash failed: 503 {
+  "error": {
+    "code": 503,
+    "message": "This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.",
+    "status": "UNAVAILABLE"
+  }
+}
+
+Gemini gemini-3.5-flash-lite busy (503), retrying
+Gemini gemini-3.5-flash-lite busy (503), retrying
+Story written by Gemini (gemini-3.5-flash-lite)
+Short idea: ఇసుకలో చిరు ప్రయత్నం | A cute baby camel with soft golden fur, wearing a bright blue scarf, with big expressive brown eyes. | A tiny energetic desert squirrel with sandy-orange fur, wearing a tiny red cap, with big curious black eyes.
+Story: రాజస్థాన్ ఎండలో చింటూ అనే బుజ్జి ఒంటె ఇసుకలో చిన్న ఇల్లు కట్టడానికి ప్రయత్నించింది. / గాలి వేగంగా వీచడంతో ఆ అందమైన ఇసుక ఇల్లు క్షణంలో కూలిపోయింది. / అది చూసి బాధపడిన ఒంటె, పక్కనే ఉన్న ఉడుత సాయంతో మళ్లీ గట్టిగా మొదలుపెట్టింది. / చివరికి వాళ్ళిద్దరూ కలిసి మరింత అందమైన ఇసుక కోటను నిర్మించి ఎంతో సంతోషించారు. / నీతి: ఓటమి ఎదురైనా పట్టుదలతో మళ్లీ ప్రయత్నిస్తే విజయం తప్పకుండా మన సొంతమవుతుంది.
   image attempt 1 failed: 503 {"status":503,"success":false,"error":{"code":"SERVICE_UNAVAILABLE","message":"The Classic API is at its limit right now. Retry after 10s, or get full
-  waiting 45s for the free image tier
-  scene 2 picture ready
-  waiting 43s for the free image tier
-  image attempt 1 failed: 503 {"status":503,"success":false,"error":{"code":"SERVICE_UNAVAILABLE","message":"The Classic API is at its limit right now. Retry after 10s, or get full
-  waiting 45s for the free image tier
-  scene 3 picture ready
   waiting 44s for the free image tier
-  image attempt 1 failed: 503 {"status":503,"success":false,"error":{"code":"SERVICE_UNAVAILABLE","message":"The Classic API is at its limit right now. Retry after 10s, or get full
-  waiting 45s for the free image tier
+  scene 1 picture via pollinations
+  waiting 43s for the free image tier
+  scene 2 picture ready
+  waiting 42s for the free image tier
+  scene 3 picture ready
+  waiting 42s for the free image tier
   scene 4 picture ready
-  Kaggle push: Kernel version 18 successfully pushed.  Please check progress at https://www.kaggle.com/code/saisrehan1/telugu-reel-video
+  Kaggle push: Kernel version 19 successfully pushed.  Please check progress at https://www.kaggle.com/code/saisrehan1/telugu-reel-video
   Kaggle GPU working... 1 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
   Kaggle GPU working... 2 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
   Kaggle GPU working... 4 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
@@ -60,13 +81,13 @@ Story: మంచు కురుస్తున్న వేళ చిన్న 
   Kaggle GPU working... 58 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
   Kaggle GPU working... 59 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
   Kaggle GPU working... 61 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
-  Kaggle GPU working... 63 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 62 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
   Kaggle GPU working... 64 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
-  Kaggle GPU working... 66 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 65 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
   Kaggle GPU working... 67 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
-  Kaggle GPU working... 69 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 68 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
   Kaggle GPU working... 70 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
-  Kaggle GPU working... 72 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 71 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
   Kaggle GPU working... 73 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
   Kaggle GPU working... 75 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
   Kaggle GPU working... 76 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
@@ -76,41 +97,42 @@ Story: మంచు కురుస్తున్న వేళ చిన్న 
   Kaggle GPU working... 82 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
   Kaggle GPU working... 84 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
   Kaggle GPU working... 85 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
-  Kaggle GPU working... 87 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 88 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 90 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 91 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 93 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 94 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 96 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 97 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 99 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 100 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 102 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 103 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 105 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 106 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 108 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 109 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 111 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 112 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 114 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 115 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 117 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 118 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 120 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 121 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 123 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 124 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 126 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 127 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 129 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 130 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 132 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 133 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 135 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 137 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 138 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle video failed: Kaggle finished without clips (status: saisrehan1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 87 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 88 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 90 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 91 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 93 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 94 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 96 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 97 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 99 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 100 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 102 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 103 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 105 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 106 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 108 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 109 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 111 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 112 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 114 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 115 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 117 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 118 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 120 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 121 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 123 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 124 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 126 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 127 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 129 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 130 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 132 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 133 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 135 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 136 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 138 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 139 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle video failed: Kaggle finished without clips (status: saisrehan1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
 No scene could be animated (see the video lines above). Skipping this run; the next run will try again.
 Animated short not made this run; nothing posted. The next scheduled run will try again.
