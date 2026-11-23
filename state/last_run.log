@@ -1,16 +1,7 @@
-run at 2026-11-22T19:09:55.042651+00:00 event=schedule
+run at 2026-11-23T01:35:55.269353+00:00 event=schedule
 MODE: PIXAR_STORIES=1 MANUAL_VIDEOS=0 OMNI_VIDEOS=0 | story AI: Gemini | images: free Pollinations
 Gemini gemini-3.8-flash busy (503), retrying
-Gemini gemini-3.8-flash busy (503), retrying
-Gemini gemini-3.8-flash busy (503), retrying
-Gemini gemini-3.8-flash failed: 503 {
-  "error": {
-    "code": 503,
-    "message": "This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.",
-    "status": "UNAVAILABLE"
-  }
-}
-
+Gemini gemini-3.8-flash error: HTTPSConnectionPool(host='generativelanguage.googleapis.com', port=443): Read timed out. (read timeout=100)
 Gemini gemini-3.7-flash busy (503), retrying
 Gemini gemini-3.7-flash busy (503), retrying
 Gemini gemini-3.7-flash busy (503), retrying
@@ -23,16 +14,16 @@ Gemini gemini-3.7-flash failed: 503 {
 }
 
 Story written by Gemini (gemini-3.6-flash)
-Short idea: చెరువును కాపాడిన చిరు స్నేహం | A cute small bright green frog with giant expressive eyes wearing a tiny red cap. | A small fluffy yellow duckling with big curious eyes wearing a soft blue scarf.
-Story: ఒకరినొకరు చూస్తూ ఊరి చెరువులోని నీరు వృథాగా పోవడం చూసి బుజ్జి కప్ప బాధపడింది. / పెద్ద తామరపాకుతో నీటిని ఆపాలని చూసినా నీటి హోరుకి కప్ప కింద పడిపోయింది. / వెంటనే చిన్ని బాతు బంకమట్టి తీసుకురాగా ఇద్దరూ కలిసి రంధ్రానికి అడ్డుగా అమర్చారు. / నీటి బొట్టు వృథా కాకుండా ఆపినందుకు ఇద్దరు మిత్రులు ఎంతో సంతోషంగా గెంతులు వేశారు. / నీతి: నీటి బొట్టును వృథా చేయకుండా కాపాడుకోవడం మనందరి కనీస బాధ్యత.
+Short idea: ఎడారిలో చిన్ని సొంత నడక | Chinni is a tiny golden-yellow desert fox with massive ears, wearing a bright red scarf and possessing huge expressive eyes. | Bujji is a chubby light-blue baby camel wearing a bright green cap and possessing friendly round eyes.
+Story: రాజస్థాన్ ఎడారిలో చిన్ని నక్క తానూ ఒంటెలా పెద్ద అడుగులు వేయాలని తాపత్రయపడింది. / కిందపడి బాధపడుతున్న చిన్నిని చూసి బుజ్జి ఒంటె ఎంతో జాలితో దగ్గరకు వచ్చింది. / బుజ్జి సైగ చేయగానే చిన్ని తన సొంత శైలిలో వేగంగా గంతులు వేయడం మొదలుపెట్టింది. / వేరొకరిలా మారడం కంటే నీలా నువ్వు ఉన్నప్పుడే నిజమైన ఆనందం లభిస్తుందని చిన్ని గ్రహించింది. / నీతి: ఇతరులను పోలి ఉండటం కంటే మన సహజ శైలిని గౌరవించడమే అసలైన గొప్పతనం.
   scene 1 picture via pollinations
   waiting 41s for the free image tier
   scene 2 picture ready
-  waiting 42s for the free image tier
+  waiting 41s for the free image tier
   scene 3 picture ready
-  waiting 42s for the free image tier
+  waiting 41s for the free image tier
   scene 4 picture ready
-  Kaggle push: Kernel version 20 successfully pushed.  Please check progress at https://www.kaggle.com/code/saisrehan1/telugu-reel-video
+  Kaggle push: Kernel version 21 successfully pushed.  Please check progress at https://www.kaggle.com/code/saisrehan1/telugu-reel-video
   Kaggle GPU working... 1 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
   Kaggle GPU working... 2 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
   Kaggle GPU working... 4 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
@@ -76,17 +67,14 @@ Story: ఒకరినొకరు చూస్తూ ఊరి చెరువ�
   Kaggle GPU working... 61 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
   Kaggle GPU working... 62 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
   Kaggle GPU working... 64 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 65 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 67 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 68 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
   Kaggle finished: saisrehan1/telugu-reel-video has status "KernelWorkerStatus.COMPLETE"
   Kaggle notebook log (last lines):
-    GPUs: 2 x Tesla T4 | setup 50 s
+    GPUs: 2 x Tesla T4 | setup 49 s
     scene size 544 x 960
-    [transformers] Token indices sequence length is longer than the specified maximum sequence length for this model (215 > 77). Running this sequence through the model will result in indexing errors
-    [transformers] Token indices sequence length is longer than the specified maximum sequence length for this model (215 > 77). Running this sequence through the model will result in indexing errors
-    start pictures made on the GPU: 4 at 152 s
-    prompts encoded 238 s
+    [transformers] Token indices sequence length is longer than the specified maximum sequence length for this model (227 > 77). Running this sequence through the model will result in indexing errors
+    [transformers] Token indices sequence length is longer than the specified maximum sequence length for this model (227 > 77). Running this sequence through the model will result in indexing errors
+    start pictures made on the GPU: 4 at 139 s
+    prompts encoded 225 s
     [gpu0] video model on GPU, free GB: 7.4 | scenes [1, 3]
     [gpu0] out of GPU memory at 544x960, 81 frames (in attention_dispatch.py:3850 _native_attention <- attention_dispatch.py:439 dispatch_attention_fn <- transformer_wan.py:143 __call__ <- transformer_wan
     [gpu0] out of GPU memory at 480x832, 81 frames (in attention_dispatch.py:3850 _native_attention <- attention_dispatch.py:439 dispatch_attention_fn <- transformer_wan.py:143 __call__ <- transformer_wan
@@ -98,10 +86,10 @@ Story: ఒకరినొకరు చూస్తూ ఊరి చెరువ�
     [gpu0] lat = pipe(image=src.resize((w, h), Image.LANCZOS), prompt_embeds=pe.to("cuda"),
     [gpu0] negative_prompt_embeds=ne.to("cuda"), height=h, width=w, num_frames=nf,
     [gpu0] RuntimeError: cusolver error: CUSOLVER_STATUS_INTERNAL_ERROR, when calling `cusolverDnCreate(handle)`. If you keep seeing this error, you may use `torch.backends.cuda.preferred_linalg_library()
-    [gpu1] scene 2 done in 1793 s (at 2346 s)
-    [gpu1] scene 4 done in 1819 s (at 4166 s)
-    workers finished with exit codes [1, 0] at 4183 s
-  Kaggle made 2 animated scene(s) in 70 min
+    [gpu1] scene 2 done in 1653 s (at 2185 s)
+    [gpu1] scene 4 done in 1678 s (at 3863 s)
+    workers finished with exit codes [1, 0] at 3890 s
+  Kaggle made 2 animated scene(s) in 65 min
 Music: synthesized playful instrumental
-Animated beats: 2 of 4, narration lines: 2 + moral, reel 17.6s
-Built out/reel.mp4 with free animated short (2/4 beats animated) (11.9 MB)
+Animated short failed: operands could not be broadcast together with shapes (830319,) (830320,) 
+Animated short not made this run; nothing posted. The next scheduled run will try again.
