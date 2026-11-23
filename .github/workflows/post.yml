@@ -5,8 +5,9 @@ on:
     paths:
       - "inbox/**"
   schedule:
-    # every 6 hours the bot tops up video ideas; uploading a video to inbox/ posts it right away
-    - cron: "20 */6 * * *"
+    # 3 reels a day, started 08:30 / 12:30 / 18:30 IST so they post around 9:45 AM, 1:45 PM and 7:45 PM IST
+    # (peak Instagram hours in India; 3 runs also stay inside Kaggle's free 30 GPU hours a week)
+    - cron: "0 3,7,13 * * *"
   workflow_dispatch:
     inputs:
       dry_run:

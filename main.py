@@ -753,7 +753,8 @@ def mix_audio(voice, music, sfx, path):
     fade = np.ones(n)
     f = int(1.5 * SR)
     fade[-f:] = np.linspace(1, 0, f)
-    mix = np.clip((voice + music[:n] * gain + sfx[:n] * 0.35) * fade, -1, 1)
+    fit = lambda a: np.pad(a[:n], (0, max(0, n - len(a))))   # rounding can leave a track a sample short
+    mix = np.clip((voice + fit(music) * gain + fit(sfx) * 0.35) * fade, -1, 1)
     with wave.open(str(path), "wb") as w:
         w.setnchannels(1)
         w.setsampwidth(2)
@@ -2192,14 +2193,25 @@ def generate_omni(state, ig_titles):
 def post_idea(idea, id_prefix, engine):
     """Caption, hashtags and meta.json for a finished out/reel.mp4 made from an idea dict (Omni or animated short)."""
     now = dt.datetime.now(IST)
+    # Instagram allows at most 5 hashtags: big, relevant tags beat many tiny ones. 4 proven reach tags + 1 that rotates
+    # (the story's own theme tag when it is a popular one), so posts don't all look identical to the algorithm.
+    limit = int(os.getenv("HASHTAG_LIMIT", "5"))
+    core = [t.strip() for t in os.getenv("HASHTAGS", "#telugu,#telugureels,#moralstories,#animation").split(",") if t.strip()]
+    popular_themes = {"#friendship", "#kindness", "#family", "#love", "#motivation", "#honesty", "#nature", "#mother",
+                      "#funny", "#cute", "#emotional", "#inspiration", "#teamwork", "#respect", "#helping"}
+    rotating = ["#storytime", "#kidsstories", "#3danimation", "#cartoon", "#telugustories", "#kidsvideos", "#pixar"]
+    tag = str(idea.get("tag", "")).lower()
+    pick = tag if tag in popular_themes else rotating[int(hashlib.md5(idea["title"].encode()).hexdigest(), 16) % len(rotating)]
     tag_list = []
-    extra = [t for t in (idea.get("hashtags") or []) if isinstance(t, str) and re.fullmatch(r"#[A-Za-z0-9_]{3,30}", t)]
-    tag = idea.get("tag") if re.fullmatch(r"#[A-Za-z0-9_]{3,30}", str(idea.get("tag", ""))) else "#story"
-    for tg in [tag] + extra[:2] + ["#telugureels", "#teluguanimation", "#moralstories", "#telugu"]:
+    for tg in core + [pick]:
         if tg not in tag_list:
             tag_list.append(tg)
     caption = "\n".join([f"📖 {idea['title']}", "", idea["caption"], "", f"నీతి: {idea['moral']}", "",
-                         "ఈ రీల్ మీ స్నేహితుడికి పంపండి 💌", (idea.get("question") or "మీకు నచ్చిందా? కామెంట్‌లో చెప్పండి 👇") + " 👇", "", " ".join(tag_list[:5])])[:2200]
+                         "ఈ రీల్ మీ స్నేహితుడికి పంపండి 💌", (idea.get("question") or "మీకు నచ్చిందా? కామెంట్‌లో చెప్పండి") + " 👇",
+                         "రోజూ కొత్త కథల కోసం ఫాలో అవ్వండి ❤️", "",
+                         # Instagram search reads caption words, so name what the reel is in both languages
+                         "తెలుగు నీతి కథలు | Telugu moral stories | Telugu animated kids story", "",
+                         " ".join(tag_list[:limit])])[:2200]
     name = f"reel-{now.strftime('%Y%m%d-%H%M')}.mp4"
     (OUT / "meta.json").write_text(json.dumps({"caption": caption, "video_name": name,
                                                "story_id": id_prefix + hashlib.md5(idea["title"].encode()).hexdigest()[:8],
@@ -2280,7 +2292,7 @@ import base64, io, json, os, subprocess, sys, time
 t0 = time.time()
 JOB = json.loads(base64.b64decode("__JOB__").decode())
 subprocess.run([sys.executable, "-m", "pip", "install", "-q", "-U", "diffusers>=0.35", "transformers>=4.51",
-                "accelerate>=1.6", "ftfy", "sentencepiece", "imageio", "imageio-ffmpeg"], check=True)
+                "accelerate>=1.6", "ftfy", "sentencepiece", "imageio", "imageio-ffmpeg", "spandrel"], check=True)
 import numpy as np
 import torch
 from PIL import Image
@@ -2360,6 +2372,7 @@ print("prompts encoded", round(time.time() - t0), "s", flush=True)
 # 2) one worker process per GPU, each animating its share of the scenes (every scene has its own start picture)
 WORKER = """
 import base64, io, json, os, sys, time
+import numpy as np
 import torch
 from PIL import Image
 from diffusers import AutoencoderKLWan, WanImageToVideoPipeline
@@ -2388,7 +2401,40 @@ try:
 except Exception as e:
     print("vae tiling unavailable:", e)
 print("video model on GPU, free GB:", round(torch.cuda.mem_get_info()[0] / 1e9, 1), "| scenes", [i + 1 for i in idx], flush=True)
+# memory-efficient attention: the default could fall back to the "math" kernel that builds the whole attention matrix
+try:
+    pipe.transformer.set_attention_backend("_native_efficient")
+    print("attention: memory-efficient", flush=True)
+except Exception as e:
+    print("memory-efficient attention unavailable:", str(e)[:200], flush=True)
+# AI upscaler (Real-ESRGAN x2): 544x960 frames become sharp 1088x1920
+UP = None
+if JOB.get("upscale"):
+    try:
+        import urllib.request
+        from spandrel import ModelLoader
+        urllib.request.urlretrieve(JOB["upscale"], "/tmp/upscaler.pth")
+        UP = ModelLoader().load_from_file("/tmp/upscaler.pth").eval()
+        print("upscaler ready: x%s" % UP.scale, flush=True)
+    except Exception as e:
+        print("upscaler unavailable:", str(e)[:200], flush=True)
 import gc, traceback
+def upscale(frames):
+    half = bool(getattr(UP, "supports_half", False))
+    UP.to("cuda")
+    if half:
+        UP.half()
+    out = []
+    try:
+        with torch.no_grad():
+            for fr in frames:
+                x = torch.from_numpy(np.asarray(fr.convert("RGB")).copy()).permute(2, 0, 1)[None]
+                x = x.to("cuda", torch.float16 if half else torch.float32) / 255.0
+                y = UP(x).clamp(0, 1)[0].permute(1, 2, 0).float().cpu().numpy()
+                out.append(Image.fromarray((y * 255).round().astype("uint8")))
+    finally:
+        UP.to("cpu")
+    return out
 def decode(lat):
     # the 5B video model leaves the GPU while the VAE turns latents into frames (the decode needs several GB)
     pipe.transformer.to("cpu")
@@ -2400,7 +2446,15 @@ def decode(lat):
             mean = torch.tensor(pipe.vae.config.latents_mean).view(1, pipe.vae.config.z_dim, 1, 1, 1).to(lat.device, lat.dtype)
             std = 1.0 / torch.tensor(pipe.vae.config.latents_std).view(1, pipe.vae.config.z_dim, 1, 1, 1).to(lat.device, lat.dtype)
             video = pipe.vae.decode(lat / std + mean, return_dict=False)[0]
-            return pipe.video_processor.postprocess_video(video, output_type="pil")[0]
+            frames = pipe.video_processor.postprocess_video(video, output_type="pil")[0]
+            del video, lat
+            torch.cuda.empty_cache()
+        if UP is not None:
+            try:
+                frames = upscale(frames)
+            except Exception as e:
+                print("upscale skipped:", str(e)[:200], flush=True)
+        return frames
     finally:
         pipe.transformer.to("cuda")
 W, H, last_dur = JOB["width"], JOB["height"], 0
@@ -2418,6 +2472,7 @@ for i in idx:
     pe, ne = EMBEDS[i]
     frames = None
     for (w, h, nf) in list(tries):
+        failed = None
         try:
             lat = pipe(image=src.resize((w, h), Image.LANCZOS), prompt_embeds=pe.to("cuda"),
                        negative_prompt_embeds=ne.to("cuda"), height=h, width=w, num_frames=nf,
@@ -2426,17 +2481,39 @@ for i in idx:
             frames = decode(lat)
             break
         except torch.OutOfMemoryError:
-            where = " <- ".join("%s:%d %s" % (f.filename.split("/")[-1], f.lineno, f.name)
-                                for f in reversed(traceback.extract_tb(sys.exc_info()[2])[-4:]))
-            print("out of GPU memory at %dx%d, %d frames (in %s)" % (w, h, nf, where), flush=True)
+            failed = " <- ".join("%s:%d %s" % (f.filename.split("/")[-1], f.lineno, f.name)
+                                 for f in reversed(traceback.extract_tb(sys.exc_info()[2])[-4:]))
+        except RuntimeError as e:
+            if "kernel" in str(e).lower() and "attention" not in str(failed):
+                print("memory-efficient attention not possible here (%s): using the default" % str(e)[:150], flush=True)
+                pipe.transformer.set_attention_backend("native")
+                failed = "attention kernel"
+            else:
+                failed = "error: " + str(e)[:200]
+        # cleanup happens OUTSIDE the except block, so the failed attempt's GPU memory is really released
+        lat = None
+        gc.collect()
+        torch.cuda.empty_cache()
+        if failed == "attention kernel":
+            try:   # same size again with the default attention
+                lat = pipe(image=src.resize((w, h), Image.LANCZOS), prompt_embeds=pe.to("cuda"),
+                           negative_prompt_embeds=ne.to("cuda"), height=h, width=w, num_frames=nf,
+                           guidance_scale=JOB["guidance"], num_inference_steps=JOB["steps"], output_type="latent",
+                           generator=torch.Generator("cpu").manual_seed(JOB["seed"] + i)).frames
+                frames = decode(lat)
+                break
+            except torch.OutOfMemoryError:
+                failed = "default attention"
             lat = None
             gc.collect()
             torch.cuda.empty_cache()
-            tries.remove((w, h, nf))   # never try a size that already failed again
+        print("out of GPU memory at %dx%d, %d frames (in %s)" % (w, h, nf, failed), flush=True)
+        tries.remove((w, h, nf))   # never try a size that already failed again
     if frames is None:
         print("scene", i + 1, "failed at every size", flush=True)
         continue
-    export_to_video(frames, "/kaggle/working/beat%d.mp4" % (i + 1), fps=JOB["fps"])
+    export_to_video(frames, "/kaggle/working/beat%d.mp4" % (i + 1), fps=JOB["fps"], quality=9)
+    frames = None
     last_dur = time.time() - b0
     print("scene %d done in %d s (at %d s)" % (i + 1, last_dur, time.time() - JOB["t0"]), flush=True)
 """
@@ -2534,6 +2611,9 @@ def kaggle_animate(key_pngs, motions, seed, workdir, image_prompts=None):
            "image_model": "" if os.getenv("KAGGLE_IMAGE_MODEL", "").lower() == "none" or not image_prompts
                           else os.getenv("KAGGLE_IMAGE_MODEL") or "Lykon/dreamshaper-xl-v2-turbo",
            "image_prompts": image_prompts or [], "image_neg": SDXL_NEG, "image_size": [768, 1344],
+           # Real-ESRGAN x2 upscaler for sharp 1080p frames (KAGGLE_UPSCALER=none turns it off)
+           "upscale": "" if os.getenv("KAGGLE_UPSCALER", "").lower() == "none" else os.getenv("KAGGLE_UPSCALER") or
+                      "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.1/RealESRGAN_x2plus.pth",
            "image_steps": int(os.getenv("KAGGLE_IMAGE_STEPS", "8")), "image_cfg": float(os.getenv("KAGGLE_IMAGE_CFG", "2")),
            # a scene is only started if it should finish before this many minutes
            "budget": int(os.getenv("KAGGLE_BUDGET_MIN", "118")) * 60}
@@ -2585,7 +2665,7 @@ def kaggle_animate(key_pngs, motions, seed, workdir, image_prompts=None):
             txt = "".join(x.get("data", "") for x in json.loads(txt))   # Kaggle logs are a JSON list of {data: ...}
         except Exception:
             pass
-        keep = ("GPU", "scene", "prompts", "worker", "pictures", "prompt", "Error", "error", "Traceback", "memory", "budget")
+        keep = ("GPU", "scene", "prompts", "worker", "pictures", "prompt", "attention", "upscale", "Error", "error", "Traceback", "memory", "budget")
         lines_ = [ln.strip() for ln in txt.replace("\r", "\n").split("\n") if ln.strip() and "%|" not in ln]
         tail = [ln for ln in lines_ if any(k in ln for k in keep)][-25:] or lines_[-12:]
         print("  Kaggle notebook log (last lines):\n    " + "\n    ".join(x[:200] for x in tail))
@@ -2625,12 +2705,13 @@ HOW IT IS MADE: {nb} shots of {secs:g} seconds, like a mini movie. Each shot sta
 which is then animated ("beats"). Same characters and same place in every shot, but vary the camera (wide, medium,
 close-up, over-the-shoulder) to tell the story. A scene describes the still picture: who is where, pose, facial
 expression, camera framing, the setting and light; characters big in the frame, side by side, never overlapping or
-hugging in a tangle. A beat describes only the motion inside that shot: what the characters do, their expressions, and
+hugging in a tangle. Prefer ONE main character per scene (close-ups); show both only when the story needs it. A beat describes only the motion inside that shot: what the characters do, their expressions, and
 small effects (sparkles, wind, splash, glow); simple clear actions (walk, turn, jump, wave, laugh, cry, hug), no
 transformations. Shot 1 must already be surprising or emotional (no slow intro). The last shot is the warm or funny payoff.
 A Telugu storyteller narrates the reel: one "narration" sentence per beat, spoken while that beat plays, describing
 what happens so the viewer clearly follows a complete little story (beginning, problem, happy ending). Natural spoken
-Telugu like a grandmother telling a story, each sentence 8 to 14 words. Characters can have simple Telugu names.
+Telugu like a grandmother telling a story, each sentence 6 to 10 words (about 4 seconds when spoken, so it fits its
+{secs:g}-second shot). Characters can have simple Telugu names.
 The Telugu "caption" goes in the Instagram post text (not on the video): something people want to send to a friend.
 
 Return ONLY JSON:
@@ -2791,16 +2872,16 @@ def generate_pixar_short(state, ig_titles):
             f = want / max(0.1, lens[i])
             if f <= 1.0:   # line is shorter than the beat: cut the beat
                 speed, pad = f"trim=duration={want:.3f},setpts=PTS-STARTPTS,", ""
-            else:          # line is longer: slow the beat smoothly (max 2.2x), hold the last frame for any rest
-                s = min(f, 2.2)
+            else:          # line is longer: slow the beat a little (max 1.5x, more looks smeary), hold the last frame for any rest
+                s = min(f, 1.5)
                 speed = f"setpts={s:.3f}*PTS,{mi}"
                 extra = want - lens[i] * s
                 pad = f",tpad=stop_mode=clone:stop_duration={extra:.3f}" if extra > 0.05 else ""
             fc += (f"[{i}:v]{speed}scale={W}:{H}:force_original_aspect_ratio=increase:flags=lanczos,crop={W}:{H},"
-                   f"fps={FPS},setsar=1,format=yuv420p{pad}[v{i}];")
+                   f"unsharp=5:5:0.45:5:5:0.0,fps={FPS},setsar=1,format=yuv420p{pad}[v{i}];")
         fc += "".join(f"[v{i}]" for i in range(k)) + f"concat=n={k}:v=1:a=0[v]"
         joined = d / "joined.mp4"
-        run(cmd + ["-filter_complex", fc, "-map", "[v]", "-c:v", "libx264", "-preset", "veryfast", "-crf", "18",
+        run(cmd + ["-filter_complex", fc, "-map", "[v]", "-c:v", "libx264", "-preset", "medium", "-crf", "17",
                    "-pix_fmt", "yuv420p", str(joined)])
         # narration + music (ducked under the voice) + a little sparkle
         rng = random.Random(seed)
