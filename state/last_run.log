@@ -1,10 +1,6 @@
-run at 2026-11-23T10:19:22.404779+00:00 event=schedule
+run at 2026-11-23T12:57:41.398572+00:00 event=schedule
 MODE: PIXAR_STORIES=1 MANUAL_VIDEOS=0 OMNI_VIDEOS=0 | story AI: Gemini | images: free Pollinations
-THIS RUN: queued
-No queued reel waiting (the last Kaggle run made only one, or it was already posted).
-Nothing from 'queued' this slot: posting a devotional image post instead.
-Telugu calendar: Karthika masam, Monday, special: కార్తీక సోమవారం, festivals: [('Karthika Pournami', 1)]
-Devotional angle: Karthika Pournami (కార్తీక పౌర్ణమి): simple pooja at home, step by step
+THIS RUN: animated
 Gemini gemini-3.8-flash busy (503), retrying
 Gemini gemini-3.8-flash busy (503), retrying
 Gemini gemini-3.8-flash busy (503), retrying
@@ -16,24 +12,146 @@ Gemini gemini-3.8-flash failed: 503 {
   }
 }
 
-Gemini gemini-3.7-flash busy (503), retrying
-Gemini gemini-3.7-flash busy (503), retrying
-Gemini gemini-3.7-flash error: HTTPSConnectionPool(host='generativelanguage.googleapis.com', port=443): Read timed out. (read timeout=100)
+Gemini gemini-3.7-flash failed: 429 {
+  "error": {
+    "code": 429,
+    "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://aistudio.google.com/do
 Story written by Gemini (gemini-3.6-flash)
-Devotional post: ఇంట కార్తీక పౌర్ణమి పూజ
+  reel 1 opening picture via pollinations (the GPU redraws it in the cute style)
+Short idea 1: మిద్దెపై కురిసిన కుండపోత ఆనందం | Chinni: A tiny bright blue bird with large expressive round eyes, wearing a cozy yellow knitted scarf. AND Bujji: A small fluffy orange squirrel with big sparkling eyes, wearing a little green cap.
+  Story: వర్షంలో తడుస్తూ చిన్ని అనే పక్షి చలితో వణికిపోతోంది. / అది చూసి బుజ్జి అనే ఉడుత త్వరగా దగ్గరకు వచ్చింది. / తన గొడుగును ఇద్దరికీ పంచుతూ పక్కనే ఆనందంగా కూర్చుంది. / ఇద్దరు కలిసి వర్షంలో నవ్వుతూ వెచ్చగా కౌగిలించుకున్నారు. / నీతి: కష్టంలో ఉన్నప్పుడు ఎదుటివారితో పంచుకునే చిన్న సాయం మనసుకు కొండంత హాయిని ఇస్తుంది.
+Gemini gemini-3.6-flash error: HTTPSConnectionPool(host='generativelanguage.googleapis.com', port=443): Read timed out. (read timeout=100)
+Gemini gemini-3.8-flash failed: 429 {
+  "error": {
+    "code": 429,
+    "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://aistudio.google.com/do
+Gemini gemini-3.7-flash failed: 429 {
+  "error": {
+    "code": 429,
+    "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://aistudio.google.com/do
+Story written by Gemini (gemini-3.5-flash-lite)
+  image attempt 1 failed: 503 {"status":503,"success":false,"error":{"code":"SERVICE_UNAVAILABLE","message":"The Classic API is at its limit right now. Retry after 10s, or get full
+  waiting 43s for the free image tier
+  image attempt 2 failed: 503 {"status":503,"success":false,"error":{"code":"SERVICE_UNAVAILABLE","message":"The Classic API is at its limit right now. Retry after 10s, or get full
+  waiting 47s for the free image tier
+  reel 2 opening picture via pollinations (the GPU redraws it in the cute style)
+Short idea 2: వర్షంలో బామ్మకు అడుగుల తోడు | A tiny yellow canary bird with big expressive eyes, wearing a tiny red woolen cap. AND A small fluffy blue rabbit with big expressive eyes, wearing a tiny green knitted scarf.
+  Story: కురుస్తున్న వర్షంలో బామ్మ నడవలేక ఇబ్బంది పడుతోంది. / చిన్ని పిట్ట తన గొడుగుతో నీటిని అడ్డుకుంది. / రెండు జంతువులు కలిసి బామ్మను మెల్లగా నడిపించాయి. / అది చూసి బామ్మ ముఖంలో చిరునవ్వు వెలిగింది. / నీతి: పెద్దవారికి చేయూతనివ్వడం మనందరి బాధ్యత.
+  Kaggle push: Kernel version 24 successfully pushed.  Please check progress at https://www.kaggle.com/code/saisrehan1/telugu-reel-video
+  Kaggle GPU working... 1 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 2 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 4 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 5 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 7 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 8 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 10 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 11 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 13 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 14 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 16 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 17 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 19 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 20 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 22 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 23 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 25 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 26 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 28 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 29 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 31 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 32 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 34 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 35 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 37 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 38 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 40 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 41 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 43 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 44 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 46 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 47 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 49 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 50 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 52 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 53 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 55 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 56 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 58 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 59 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 61 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 62 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 64 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 66 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 67 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 69 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 70 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 72 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 73 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 75 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 76 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 78 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 79 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 81 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 82 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 84 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 85 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 87 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 88 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 90 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 91 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 93 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 94 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 96 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 97 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 99 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 100 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 102 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 103 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 105 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 106 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 108 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 109 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 111 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 112 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 114 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 115 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 117 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 118 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 120 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 121 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 123 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 125 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 126 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 128 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 129 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 131 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 132 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 134 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 135 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 137 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle GPU working... 138 min (an1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+  Kaggle video failed: Kaggle finished without clips (status: saisrehan1/telugu-reel-video has status "KernelWorkerStatus.QUEUED")
+No reel got enough animated scenes (see the video lines above).
+Nothing from 'animated' this slot: posting a devotional image post instead.
+Telugu calendar: Karthika masam, Monday, special: కార్తీక సోమవారం, festivals: [('Karthika Pournami', 1)]
+Devotional angle: Karthika Pournami (కార్తీక పౌర్ణమి): traditional naivedyam / prasadam and special foods made that day
+Gemini gemini-3.5-flash-lite busy (503), retrying
+Gemini gemini-3.5-flash-lite busy (503), retrying
+Story written by Gemini (gemini-3.5-flash-lite)
+Devotional post: కార్తీక పౌర్ణమి ప్రసాదాలు
   card 1/6 ready
-  waiting 42s for the free image tier
+  waiting 40s for the free image tier
   card 2/6 ready
-  waiting 42s for the free image tier
-  card 3/6 ready
   waiting 41s for the free image tier
+  card 3/6 ready
+  waiting 39s for the free image tier
+  image attempt 1 failed: 503 {"status":503,"success":false,"error":{"code":"SERVICE_UNAVAILABLE","message":"The Classic API is at its limit right now. Retry after 10s, or get full
+  waiting 44s for the free image tier
   card 4/6 ready
   waiting 42s for the free image tier
-  card 5/6 ready
-  waiting 41s for the free image tier
   image attempt 1 failed: 503 {"status":503,"success":false,"error":{"code":"SERVICE_UNAVAILABLE","message":"The Classic API is at its limit right now. Retry after 10s, or get full
   waiting 45s for the free image tier
-  image attempt 2 failed: 503 {"status":503,"success":false,"error":{"code":"SERVICE_UNAVAILABLE","message":"The Classic API is at its limit right now. Retry after 10s, or get full
-  waiting 45s for the free image tier
+  card 5/6 ready
+  waiting 42s for the free image tier
   card 6/6 ready
 Built out/post/ with a 6-card devotional post
