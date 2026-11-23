@@ -2196,17 +2196,29 @@ def post_idea(idea, id_prefix, engine):
     # Instagram allows at most 5 hashtags: big, relevant tags beat many tiny ones. 4 proven reach tags + 1 that rotates
     # (the story's own theme tag when it is a popular one), so posts don't all look identical to the algorithm.
     limit = int(os.getenv("HASHTAG_LIMIT", "5"))
-    core = [t.strip() for t in os.getenv("HASHTAGS", "#telugu,#telugureels,#moralstories,#animation").split(",") if t.strip()]
+    facts = idea.get("kind") == "facts"
+    core = [t.strip() for t in (os.getenv("FACT_HASHTAGS", "#telugu,#telugufacts,#telugureels,#facts") if facts else
+                                os.getenv("HASHTAGS", "#telugu,#telugureels,#moralstories,#animation")).split(",") if t.strip()]
     popular_themes = {"#friendship", "#kindness", "#family", "#love", "#motivation", "#honesty", "#nature", "#mother",
                       "#funny", "#cute", "#emotional", "#inspiration", "#teamwork", "#respect", "#helping"}
     rotating = ["#storytime", "#kidsstories", "#3danimation", "#cartoon", "#telugustories", "#kidsvideos", "#pixar"]
     tag = str(idea.get("tag", "")).lower()
-    pick = tag if tag in popular_themes else rotating[int(hashlib.md5(idea["title"].encode()).hexdigest(), 16) % len(rotating)]
+    if facts:   # fact reels: the subject's own tag (#space, #gold ...) is usually a big one
+        pick = tag if re.fullmatch(r"#[a-z0-9_]{3,30}", tag) else "#didyouknow"
+    else:
+        pick = tag if tag in popular_themes else rotating[int(hashlib.md5(idea["title"].encode()).hexdigest(), 16) % len(rotating)]
     tag_list = []
     for tg in core + [pick]:
         if tg not in tag_list:
             tag_list.append(tg)
-    caption = "\n".join([f"📖 {idea['title']}", "", idea["caption"], "", f"నీతి: {idea['moral']}", "",
+    if facts:
+        caption = "\n".join([f"🤯 {idea['title']}", "", idea["caption"], "",
+                             "ఈ రీల్ మీ ఫ్రెండ్‌కి పంపండి 💌", (idea.get("question") or "మీకు ఇది ముందే తెలుసా?") + " 👇",
+                             "రోజూ ఇలాంటి ఆసక్తికరమైన విషయాల కోసం ఫాలో అవ్వండి ❤️", "",
+                             "మీకు తెలుసా | తెలుగు ఫ్యాక్ట్స్ | Telugu facts | Did you know", "",
+                             " ".join(tag_list[:limit])])[:2200]
+    else:
+        caption = "\n".join([f"📖 {idea['title']}", "", idea["caption"], "", f"నీతి: {idea['moral']}", "",
                          "ఈ రీల్ మీ స్నేహితుడికి పంపండి 💌", (idea.get("question") or "మీకు నచ్చిందా? కామెంట్‌లో చెప్పండి") + " 👇",
                          "రోజూ కొత్త కథల కోసం ఫాలో అవ్వండి ❤️", "",
                          # Instagram search reads caption words, so name what the reel is in both languages
@@ -2686,9 +2698,15 @@ def media_seconds(path):
     return float(p.stdout.strip() or 0)
 
 
-def short_concept(used_titles, used_morals):
+def short_concept(used_titles, used_morals, trends=None):
     """AI invents one original animated micro-story (Telugu narration + English image/motion prompts)."""
     setting, theme = random.choice(PIXAR_INSPIRATION["setting"]), random.choice(PIXAR_INSPIRATION["theme"])
+    trend_hint = ""
+    if trends:
+        trend_hint = ("\nTrending in Telangana/Andhra Pradesh right now: " + "; ".join(t for t, _, _ in trends[:15]) +
+                      ".\nIf one of these is a kid-friendly subject (a festival, season, weather, sport, food, animal, "
+                      "place or invention; never politics, religion, crime, accidents or real people), build the story "
+                      "around it so it feels timely; otherwise ignore the list.")
     nb = max(2, min(8, int(os.getenv("SHORT_BEATS", "4"))))
     secs = float(os.getenv("SHORT_BEAT_SECONDS", "5"))
     prompt = f"""You are the creative director of a Telugu Instagram Reels page that posts short, heart-touching or funny animated films.
@@ -2696,7 +2714,7 @@ Invent ONE original {int(nb * secs)}-second Pixar-style 3D animated micro-story 
 Cast: one or two cute, expressive personified characters (animals, birds, everyday objects, fruits, vegetables, toys...).
 Give each character a simple, iconic cartoon design (one main colour plus one accessory such as a scarf, cap or bow) so it
 looks the same in every picture; if two are animals, make them clearly different species and colours.
-Inspiration (you may reinterpret): setting near "{setting}", theme around "{theme}". Warm cinematic look.
+Inspiration (you may reinterpret): setting near "{setting}", theme around "{theme}". Warm cinematic look.{trend_hint}
 Rules: kid-friendly; no violence; no politics or religion; no real people; no brands; no famous or copyrighted characters.
 Do NOT reuse or imitate these titles: {json.dumps(used_titles[-40:], ensure_ascii=False)}
 and avoid these morals: {json.dumps(used_morals[-40:], ensure_ascii=False)}
@@ -2763,7 +2781,8 @@ def generate_pixar_short(state, ig_titles):
     try:
         used_titles = [u.get("title", "") for u in state["used"]] + [t.replace("📖", "").strip() for t in ig_titles]
         used_morals = [u.get("moral", "") for u in state["used"]]
-        idea = short_concept([t for t in used_titles if t], [m_ for m_ in used_morals if m_])
+        trends = fetch_trends() if os.getenv("STORY_TRENDS", "1") == "1" else []
+        idea = short_concept([t for t in used_titles if t], [m_ for m_ in used_morals if m_], trends)
         if not idea:
             return False
         print(f"Short idea: {idea['title']} | {' | '.join(idea['characters'])[:300]}")
@@ -2899,6 +2918,165 @@ def generate_pixar_short(state, ig_titles):
         print(f"Animated short failed: {str(e)[:500]}")
         return False
     return post_idea(idea, "short-", f"free animated short ({animated}/{len(idea['beats'])} beats animated)")
+
+
+# ------------------------------------------- trending "మీకు తెలుసా?" fact reels (no GPU: AI pictures + camera moves)
+# What Telugu people search right now (free Google Trends feeds for Telangana / Andhra Pradesh) becomes the hook; the
+# reel then tells timeless, well-known facts about that subject, so it rides the trend without repeating news claims.
+FACT_STYLE = ("Bright, clear, highly detailed vertical image, the main subject large, centred and instantly recognisable, "
+              "vivid natural colours, bright daylight or clean studio lighting, sharp focus, high quality photo or 3D "
+              "render, eye-catching, not dark, no text, no letters, no watermark, no logos")
+
+
+def fetch_trends():
+    """[(topic, approx_traffic, [headlines])] from Google Trends, Telugu states first. Never raises."""
+    import xml.etree.ElementTree as ET
+    out, seen = [], set()
+    for geo in [g.strip() for g in os.getenv("TREND_GEOS", "IN-TG,IN-AP,IN").split(",") if g.strip()]:
+        try:
+            r = requests.get(f"https://trends.google.com/trending/rss?geo={geo}", timeout=30,
+                             headers={"User-Agent": "telugu-story-reel-bot"})
+            for it in ET.fromstring(r.content).iter("item"):
+                kids = {c.tag.split("}")[-1]: c for c in it}
+                title = (it.findtext("title") or "").strip()
+                if not title or title.lower() in seen:
+                    continue
+                seen.add(title.lower())
+                news = [(n.find("{*}news_item_title").text or "").strip() for n in it.findall("{*}news_item")
+                        if n.find("{*}news_item_title") is not None][:2]
+                out.append((title, (kids.get("approx_traffic").text if "approx_traffic" in kids else "") or "", news))
+        except Exception as e:
+            print(f"  trends {geo} unavailable: {str(e)[:120]}")
+    return out[:30]
+
+
+def trend_concept(trends, used_titles):
+    listing = "\n".join(f"- {t} ({tr} searches): {' / '.join(n)[:220]}" for t, tr, n in trends) or "- (no trends available)"
+    prompt = f"""You run a viral Telugu Instagram Reels page. Make ONE 30-40 second "మీకు తెలుసా?" (did you know?) reel.
+What people in Telangana and Andhra Pradesh are searching on Google right now:
+{listing}
+
+Pick the trend that gives the most surprising, share-worthy reel for Telugu viewers. SKIP anything about politics,
+politicians, crime, deaths, accidents, disasters, religion or temples, caste, celebrity gossip or personal life,
+TV-serial or movie spoilers, betting, lottery, adult topics or medical advice. Good: science, space, nature,
+animals, food, festivals' history, sports in general, technology, money basics, history, famous places in AP/TG.
+Use the trend only as the HOOK, then tell timeless, well-known, verifiable facts about its SUBJECT (e.g. trend
+"gold rate" -> amazing facts about gold). NEVER state today's news, prices, scores, dates or any number you are not
+sure of. If no trend is suitable, choose an evergreen surprising topic Telugu people love.
+Do NOT repeat these earlier reels: {json.dumps(used_titles[-40:], ensure_ascii=False)}
+
+Narration: natural spoken Telugu, excited storyteller voice. The hook must stop the scroll in 2 seconds (a
+question or shocking statement). Then 5 facts, each one sentence of 9 to 15 words, most surprising fact last.
+Write numbers as Telugu words. No English words in the narration.
+Images: one English prompt per line, a striking cinematic picture of that fact; never a real person's face or
+likeness, no text, no logos.
+
+Return ONLY JSON:
+{{"trend": "the trend you used (or evergreen)", "title": "short Telugu title",
+"hook": "Telugu hook sentence", "hook_image": "English image prompt",
+"facts": [{{"line": "Telugu fact sentence", "image": "English image prompt"}}, ... exactly 5],
+"caption": "Telugu post text (max 18 words) that makes people share", "question": "short Telugu question for comments",
+"tag": "one popular English hashtag about the subject, e.g. #space"}}"""
+    for attempt in range(3):
+        try:
+            raw = json.loads(re.sub(r"^```(?:json)?|```$", "", llm_json_text(prompt).strip(), flags=re.M).strip())
+            facts = [f for f in raw.get("facts", []) if isinstance(f, dict) and TELUGU_RE.search(str(f.get("line", "")))
+                     and len(str(f.get("image", ""))) > 15][:6]
+            assert len(facts) >= 4, "facts missing"
+            lines = [str(raw.get("hook", ""))] + [str(f["line"]) for f in facts]
+            assert all(TELUGU_RE.search(x) for x in lines + [str(raw.get("title", "")), str(raw.get("caption", ""))]), "Telugu missing"
+            assert not any(LATIN_RE.search(x) for x in lines), "narration has English letters"
+            assert all(3 <= len(x.split()) <= 24 for x in lines), "narration lines too long or short"
+            assert not TELUGU_RE.search(" ".join(str(f["image"]) for f in facts) + str(raw.get("hook_image", ""))), "image prompts must be English"
+            if any(_sim(raw["title"], t) > 0.5 for t in used_titles):
+                raise ValueError("too similar to an earlier reel")
+            raw["facts"] = facts
+            return raw
+        except Exception as e:
+            print(f"Trend reel attempt {attempt + 1} failed: {e}")
+            time.sleep(8 * (attempt + 1))
+    return None
+
+
+def generate_trend_reel(state, ig_titles):
+    """Returns True if out/reel.mp4 is ready to post. Never raises."""
+    try:
+        trends = fetch_trends()
+        print(f"Trending now ({len(trends)}): " + " | ".join(t for t, _, _ in trends[:12]))
+        used = [u.get("title", "") for u in state["used"]] + [t.replace("📖", "").replace("🤯", "").strip() for t in ig_titles]
+        idea = trend_concept(trends, [t for t in used if t])
+        if not idea:
+            return False
+        print(f"Trend reel: {idea['title']} (trend: {idea.get('trend', '?')})")
+        d = OUT / "trend"
+        d.mkdir(parents=True, exist_ok=True)
+        for old in d.glob("*"):
+            old.unlink()
+        shots = [(idea["hook"], idea.get("hook_image") or idea["facts"][0]["image"])] + \
+                [(f["line"], f["image"]) for f in idea["facts"]]
+        seed = random.randint(1, 10 ** 6)
+        imgs, prev = [], None
+        for i, (_, prompt) in enumerate(shots):
+            p = d / f"img{i}.png"
+            try:
+                free_image(f"{prompt}. {FACT_STYLE}.", seed + i, p)
+                cover_fit(p)
+                prev = p
+            except Exception as e:
+                print(f"  picture {i + 1} failed ({str(e)[:120]})" + ("; reusing the previous one" if prev else ""))
+                if not prev:
+                    return False
+            imgs.append(prev)
+            print(f"  picture {i + 1}/{len(shots)} ready")
+        segs = [{"kind": "line", "spk": NARRATOR, "text": t} for t, _ in shots]
+        segs.append({"kind": "outro", "spk": NARRATOR, "text": "ఇలాంటి ఆసక్తికరమైన విషయాల కోసం ఫాలో అవ్వండి!"})
+        voice, starts, durs, _envs, total = make_voice(segs)
+        bounds = [0.0] + [max(0.5, starts[i] - 0.15) for i in range(1, len(shots))] + [total]   # outro stays on the last picture
+        moves = ["in", "pan_r", "out", "pan_l", "up", "in"]
+        clips = []
+        for i, img in enumerate(imgs):
+            dur = max(1.0, bounds[i + 1] - bounds[i])
+            # quick cuts hold attention: a long line gets two different camera moves on its picture
+            parts = [dur] if dur < 4.5 else [dur / 2, dur - dur / 2]
+            for k, p_dur in enumerate(parts):
+                c = d / f"shot{i}_{k}.mp4"
+                still_to_clip(img, c, p_dur, moves[(i + k * 3) % len(moves)])
+                clips.append(c)
+        cmd = ["ffmpeg", "-y", "-loglevel", "error"]
+        for c in clips:
+            cmd += ["-i", str(c)]
+        fc = "".join(f"[{i}:v]setsar=1[v{i}];" for i in range(len(clips))) + \
+             "".join(f"[v{i}]" for i in range(len(clips))) + f"concat=n={len(clips)}:v=1:a=0[v]"
+        joined = d / "joined.mp4"
+        run(cmd + ["-filter_complex", fc, "-map", "[v]", "-c:v", "libx264", "-preset", "medium", "-crf", "18",
+                   "-pix_fmt", "yuv420p", str(joined)])
+        rng = random.Random(seed)
+        n = len(voice)
+        music = get_music(n / SR, rng) * 1.4
+        sfx = make_sfx([(0.05, "pop")] + [(b - 0.3, "whoosh") for b in bounds[1:-1]], n, rng)
+        wav = d / "audio.wav"
+        mix_audio(voice, music, sfx, wav)
+        run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(joined), "-i", str(wav), "-map", "0:v", "-map", "1:a",
+             "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-ac", "2", "-shortest", "-movflags", "+faststart",
+             str(OUT / "reel.mp4")])
+        print(f"Trend reel {media_seconds(OUT / 'reel.mp4'):.1f}s, {len(shots)} pictures")
+    except Exception as e:
+        print(f"Trend reel failed: {str(e)[:500]}")
+        return False
+    idea["kind"] = "facts"
+    idea["moral"] = ""
+    return post_idea(idea, "facts-", "trending fact reel")
+
+
+def reel_format():
+    """'animated' or 'trending' for this run: REEL_FORMAT, or by the 3-hour slot (ANIMATED_HOURS_UTC)."""
+    fmt = os.getenv("REEL_FORMAT", "auto").strip().lower()
+    if fmt in ("animated", "trending"):
+        return fmt
+    now = dt.datetime.now(dt.timezone.utc)
+    slot = round((now.hour + now.minute / 60) / 3) * 3 % 24   # a late-starting run still counts as its slot
+    hours = {int(h) for h in os.getenv("ANIMATED_HOURS_UTC", "6,12,15").split(",") if h.strip().isdigit()}
+    return "animated" if slot in hours else "trending"
 
 
 # -------------------------------- manual mode: you make the clip with your own Gemini plan, the bot does the rest
@@ -3170,10 +3348,22 @@ def generate():
     if omni_wanted() and generate_omni(state, ig):
         return
     if os.getenv("PIXAR_STORIES") == "1" and os.getenv("PIXAR_FORMAT", "short") == "short":
-        # 15 s animated short (free Wan 2.2 video model), like the reference reels
-        if not generate_pixar_short(state, ig):
-            print("Animated short not made this run; nothing posted. The next scheduled run will try again.")
-            set_output("has_post", "false")
+        # every 3 hours: animated story at the peak slots (Kaggle GPU), trending "మీకు తెలుసా?" reel in the others
+        fmt = reel_format()
+        print(f"REEL FORMAT this run: {fmt}")
+        if fmt == "trending":
+            if not generate_trend_reel(state, ig):
+                print("Trending reel not made this run; nothing posted.")
+                set_output("has_post", "false")
+            return
+        if generate_pixar_short(state, ig):
+            return
+        if os.getenv("FALLBACK_TRENDING", "1") == "1":
+            print("Animated short not made: posting a trending fact reel in this slot instead.")
+            if generate_trend_reel(state, ig):
+                return
+        print("Nothing made this run; the next scheduled run will try again.")
+        set_output("has_post", "false")
         return
     story = None
     if os.getenv("PIXAR_STORIES") == "1":   # PIXAR_FORMAT=story: longer narrated story over Pixar stills
@@ -3355,6 +3545,10 @@ if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else "all"
     if cmd == "prompts":
         write_prompts()
+        sys.exit(0)
+    if cmd == "trend":   # one trending fact reel in out/reel.mp4 (not posted)
+        os.environ.update(PIXAR_STORIES="1", PIXAR_FORMAT="short", REEL_FORMAT="trending")
+        generate()
         sys.exit(0)
     if cmd in ("pixar-reel", "short"):   # AI writes a new idea and it becomes a reel in out/reel.mp4 (not posted)
         os.environ["PIXAR_STORIES"] = "1"
