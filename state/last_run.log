@@ -1,4 +1,4 @@
-run at 2026-11-23T18:49:05.536655+00:00 event=schedule
+run at 2026-11-23T21:48:17.925899+00:00 event=schedule
 MODE: PIXAR_STORIES=1 MANUAL_VIDEOS=0 OMNI_VIDEOS=0 | story AI: Gemini | images: free Pollinations
 THIS RUN: post
 Telugu calendar: Karthika masam, Tuesday, special: -, festivals: [('Karthika Pournami', 0)]
@@ -14,152 +14,22 @@ Gemini gemini-3.8-flash failed: 503 {
   }
 }
 
-Gemini gemini-3.7-flash failed: 429 {
-  "error": {
-    "code": 429,
-    "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://aistudio.google.com/do
-Gemini gemini-3.6-flash busy (503), retrying
-Gemini gemini-3.6-flash busy (503), retrying
-Gemini gemini-3.6-flash failed: 429 {
-  "error": {
-    "code": 429,
-    "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://aistudio.google.com/do
-Gemini gemini-3.5-flash-lite busy (503), retrying
-Gemini gemini-3.5-flash-lite busy (503), retrying
-Gemini gemini-3.5-flash-lite busy (503), retrying
-Gemini gemini-3.5-flash-lite failed: 503 {
-  "error": {
-    "code": 503,
-    "message": "This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.",
-    "status": "UNAVAILABLE"
-  }
-}
-
-Gemini gemini-3.1-flash-lite busy (503), retrying
-Gemini gemini-3.1-flash-lite busy (503), retrying
-Gemini gemini-3.1-flash-lite busy (503), retrying
-Gemini gemini-3.1-flash-lite failed: 503 {
-  "error": {
-    "code": 503,
-    "message": "This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.",
-    "status": "UNAVAILABLE"
-  }
-}
-
-Gemini model gemini-2.5-flash not available, trying the next one
-Gemini model gemini-2.5-flash-lite not available, trying the next one
-All Gemini models failed; using the free Pollinations text model instead.
-Story written by Pollinations (gpt-oss-20b, free)
-Devotional post attempt 1 failed: too similar to an earlier post
-Gemini gemini-3.8-flash busy (503), retrying
-Gemini gemini-3.8-flash busy (503), retrying
-Gemini gemini-3.8-flash busy (503), retrying
-Gemini gemini-3.8-flash failed: 503 {
-  "error": {
-    "code": 503,
-    "message": "This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.",
-    "status": "UNAVAILABLE"
-  }
-}
-
-Gemini gemini-3.7-flash failed: 429 {
-  "error": {
-    "code": 429,
-    "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://aistudio.google.com/do
-Gemini gemini-3.6-flash failed: 429 {
-  "error": {
-    "code": 429,
-    "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://aistudio.google.com/do
-Gemini gemini-3.5-flash-lite busy (503), retrying
-Gemini gemini-3.5-flash-lite busy (503), retrying
-Gemini gemini-3.5-flash-lite busy (503), retrying
-Gemini gemini-3.5-flash-lite failed: 503 {
-  "error": {
-    "code": 503,
-    "message": "This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.",
-    "status": "UNAVAILABLE"
-  }
-}
-
-Gemini gemini-3.1-flash-lite error: HTTPSConnectionPool(host='generativelanguage.googleapis.com', port=443): Read timed out. (read timeout=100)
-Gemini model gemini-2.5-flash not available, trying the next one
-Gemini model gemini-2.5-flash-lite not available, trying the next one
-All Gemini models failed; using the free Pollinations text model instead.
-Story written by Pollinations (gpt-oss-20b, free)
-Devotional post attempt 2 failed: too similar to an earlier post
-Gemini gemini-3.8-flash failed: 429 {
-  "error": {
-    "code": 429,
-    "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://aistudio.google.com/do
-Gemini gemini-3.7-flash failed: 429 {
-  "error": {
-    "code": 429,
-    "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://aistudio.google.com/do
-Gemini gemini-3.6-flash busy (503), retrying
-Gemini gemini-3.6-flash error: HTTPSConnectionPool(host='generativelanguage.googleapis.com', port=443): Read timed out. (read timeout=100)
-Gemini gemini-3.5-flash-lite busy (503), retrying
-Gemini gemini-3.5-flash-lite busy (503), retrying
-Gemini gemini-3.5-flash-lite busy (503), retrying
-Gemini gemini-3.5-flash-lite failed: 503 {
-  "error": {
-    "code": 503,
-    "message": "This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.",
-    "status": "UNAVAILABLE"
-  }
-}
-
-Gemini gemini-3.1-flash-lite busy (503), retrying
-Gemini gemini-3.1-flash-lite busy (503), retrying
-Gemini gemini-3.1-flash-lite busy (503), retrying
-Gemini gemini-3.1-flash-lite failed: 503 {
-  "error": {
-    "code": 503,
-    "message": "This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.",
-    "status": "UNAVAILABLE"
-  }
-}
-
-Gemini model gemini-2.5-flash not available, trying the next one
-Gemini model gemini-2.5-flash-lite not available, trying the next one
-All Gemini models failed; using the free Pollinations text model instead.
-Story written by Pollinations (gpt-oss-20b, free)
-Devotional post attempt 3 failed: too similar to an earlier post
-Devotional angle: Karthika Pournami (కార్తీక పౌర్ణమి): simple pooja at home, step by step
-Gemini gemini-3.8-flash failed: 429 {
-  "error": {
-    "code": 429,
-    "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://aistudio.google.com/do
-Gemini gemini-3.7-flash busy (503), retrying
 Gemini gemini-3.7-flash busy (503), retrying
 Gemini gemini-3.7-flash failed: 429 {
   "error": {
     "code": 429,
     "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://aistudio.google.com/do
-Gemini gemini-3.6-flash failed: 429 {
-  "error": {
-    "code": 429,
-    "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://aistudio.google.com/do
-Gemini gemini-3.5-flash-lite busy (503), retrying
-Gemini gemini-3.5-flash-lite busy (503), retrying
-Gemini gemini-3.5-flash-lite busy (503), retrying
-Gemini gemini-3.5-flash-lite failed: 503 {
-  "error": {
-    "code": 503,
-    "message": "This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.",
-    "status": "UNAVAILABLE"
-  }
-}
-
-Gemini gemini-3.1-flash-lite busy (503), retrying
-Gemini gemini-3.1-flash-lite busy (503), retrying
-Story written by Gemini (gemini-3.1-flash-lite)
-Devotional post: కార్తీక పౌర్ణమి పూజా విధానం
+Gemini gemini-3.6-flash busy (503), retrying
+Story written by Gemini (gemini-3.6-flash)
+Devotional post: కార్తీక పౌర్ణమి విశిష్టత
   card 1/6 ready
-  waiting 42s for the free image tier
+  waiting 43s for the free image tier
+  image attempt 1 failed: 503 {"status":503,"success":false,"error":{"code":"SERVICE_UNAVAILABLE","message":"The Classic API is at its limit right now. Retry after 10s, or get full
+  waiting 45s for the free image tier
   card 2/6 ready
-  waiting 41s for the free image tier
+  waiting 42s for the free image tier
   card 3/6 ready
-  waiting 41s for the free image tier
+  waiting 43s for the free image tier
   image attempt 1 failed: 503 {"status":503,"success":false,"error":{"code":"SERVICE_UNAVAILABLE","message":"The Classic API is at its limit right now. Retry after 10s, or get full
   waiting 44s for the free image tier
   card 4/6 ready
@@ -167,8 +37,6 @@ Devotional post: కార్తీక పౌర్ణమి పూజా వి
   card 5/6 ready
   waiting 42s for the free image tier
   image attempt 1 failed: 503 {"status":503,"success":false,"error":{"code":"SERVICE_UNAVAILABLE","message":"The Classic API is at its limit right now. Retry after 10s, or get full
-  waiting 44s for the free image tier
-  image attempt 2 failed: 503 {"status":503,"success":false,"error":{"code":"SERVICE_UNAVAILABLE","message":"The Classic API is at its limit right now. Retry after 10s, or get full
   waiting 45s for the free image tier
   card 6/6 ready
 Built out/post/ with a 6-card devotional post
