@@ -2195,6 +2195,19 @@ def build_caption(idea, post=False):
     # Instagram allows at most 5 hashtags: big, relevant tags beat many tiny ones. 4 proven reach tags + 1 that rotates
     # (the story's own theme tag when it is a popular one), so posts don't all look identical to the algorithm.
     limit = int(os.getenv("HASHTAG_LIMIT", "5"))
+    if idea.get("kind") == "devotional":
+        tags = []
+        for tg in [idea.get("month_tag", ""), str(idea.get("tag", "")).lower()] + \
+                  os.getenv("DEVOTION_HASHTAGS", "#telugu,#devotional,#pooja,#hindufestivals").split(","):
+            tg = tg.strip()
+            if re.fullmatch(r"#[a-z0-9_]{3,30}", tg) and tg not in tags:
+                tags.append(tg)
+        return "\n".join([f"🪔 {idea['title']}", "", idea["caption"], "", "స్వైప్ చేసి అన్నీ చూడండి 👉",
+                          "సేవ్ చేసుకోండి, మీ కుటుంబ సభ్యులకు షేర్ చేయండి 🙏",
+                          (idea.get("question") or "మీ ఇంట్లో ఎలా చేస్తారు? కామెంట్‌లో చెప్పండి") + " 👇",
+                          "రోజూ పండుగలు, పూజలు, ఆచారాల కోసం ఫాలో అవ్వండి 🙏", "",
+                          str(idea.get("search") or "తెలుగు పండుగలు | పూజ విధానం | Telugu devotional"), "",
+                          " ".join(tags[:limit])])[:2200]
     facts = idea.get("kind") == "facts"
     core = [t.strip() for t in (os.getenv("FACT_HASHTAGS", "#telugu,#telugufacts,#telugureels,#facts") if facts else
                                 os.getenv("HASHTAGS", "#telugu,#telugureels,#moralstories,#animation")).split(",") if t.strip()]
@@ -3196,6 +3209,16 @@ def generate_fact_post(state, ig_titles):
         if not idea:
             return False
         print(f"Fact post: {idea['title']} (trend: {idea.get('trend', '?')})")
+        idea["kind"] = "facts"
+        return build_carousel(idea, FACT_STYLE, "fact post")
+    except Exception as e:
+        print(f"Fact post failed: {str(e)[:500]}")
+        return False
+
+
+def build_carousel(idea, style, label):
+    """Cover (idea['hook']) + one card per idea['facts'] item into out/post/, plus meta.json. Returns True when ready."""
+    try:
         d = OUT / "post"
         d.mkdir(parents=True, exist_ok=True)
         for old in d.glob("*"):
@@ -3208,7 +3231,7 @@ def generate_fact_post(state, ig_titles):
         for i, (text, prompt) in enumerate(cards):
             raw = d / f"raw{i}.png"
             try:
-                free_image(f"{prompt}. {FACT_STYLE}.", seed + i, raw)
+                free_image(f"{prompt}. {style}.", seed + i, raw)
                 prev = raw
             except Exception as e:
                 print(f"  picture {i + 1} failed ({str(e)[:120]})" + ("; reusing the previous one" if prev else ""))
@@ -3220,29 +3243,191 @@ def generate_fact_post(state, ig_titles):
             print(f"  card {i + 1}/{len(cards)} ready")
         for r in d.glob("raw*.png"):
             r.unlink()
-        idea["kind"] = "facts"
         caption = build_caption(idea, post=True)
         (OUT / "meta.json").write_text(json.dumps({
             "type": "carousel", "images": names, "caption": caption, "video_name": names[0],
             "story_id": "post-" + hashlib.md5(idea["title"].encode()).hexdigest()[:8],
             "title": idea["title"], "moral": ""}, ensure_ascii=False), encoding="utf-8")
-        print(f"Built out/post/ with a {len(names)}-card fact post")
+        print(f"Built out/post/ with a {len(names)}-card {label}")
         set_output("has_post", "true")
         set_output("post_type", "carousel")
         set_output("video_name", names[0])
         return True
     except Exception as e:
-        print(f"Fact post failed: {str(e)[:500]}")
+        print(f"{label} failed: {str(e)[:500]}")
         return False
 
 
-SLOT_PLAN_DEFAULT = "0:post,3:post,6:animated,9:queued,12:animated,15:queued,18:trending,21:post"
+# ---------------------------------- devotional image posts: the current Telugu month, its festivals, poojas and foods
+# Telugu (amavasyant) month start dates and big festivals. Dates are approximate (+-1 day): posts never print them,
+# they only decide what is "now" and "coming up". Extend the lists for later years.
+TELUGU_MONTHS = [
+    ("2026-10-10", "ఆశ్వయుజ", "Ashwayuja"), ("2026-11-09", "కార్తీక", "Karthika"), ("2026-12-09", "మార్గశిర", "Margasira"),
+    ("2027-01-08", "పుష్య", "Pushya"), ("2027-02-06", "మాఘ", "Magha"), ("2027-03-08", "ఫాల్గుణ", "Phalguna"),
+    ("2027-04-06", "చైత్ర", "Chaitra"), ("2027-05-06", "వైశాఖ", "Vaisakha"), ("2027-06-04", "జ్యేష్ఠ", "Jyeshta"),
+    ("2027-07-04", "ఆషాఢ", "Ashadha"), ("2027-08-02", "శ్రావణ", "Sravana"), ("2027-08-31", "భాద్రపద", "Bhadrapada"),
+    ("2027-09-30", "ఆశ్వయుజ", "Ashwayuja"), ("2027-10-29", "కార్తీక", "Karthika"), ("2027-11-28", "మార్గశిర", "Margasira"),
+    ("2027-12-27", "పుష్య", "Pushya")]
+FESTIVALS = [
+    ("2026-11-24", "కార్తీక పౌర్ణమి", "Karthika Pournami"), ("2026-12-15", "సుబ్రహ్మణ్య షష్ఠి", "Subrahmanya Shashti"),
+    ("2026-12-16", "ధనుర్మాసం ప్రారంభం", "Dhanurmasam begins"), ("2026-12-20", "వైకుంఠ ఏకాదశి", "Vaikuntha Ekadasi"),
+    ("2026-12-24", "దత్త జయంతి", "Datta Jayanti"), ("2027-01-14", "భోగి", "Bhogi"), ("2027-01-15", "మకర సంక్రాంతి", "Sankranti"),
+    ("2027-01-16", "కనుమ", "Kanuma"), ("2027-02-11", "వసంత పంచమి", "Vasantha Panchami"), ("2027-02-13", "రథ సప్తమి", "Ratha Saptami"),
+    ("2027-03-06", "మహా శివరాత్రి", "Maha Shivaratri"), ("2027-03-22", "హోళీ", "Holi"), ("2027-04-07", "ఉగాది", "Ugadi"),
+    ("2027-04-15", "శ్రీరామ నవమి", "Sri Rama Navami"), ("2027-05-09", "అక్షయ తృతీయ", "Akshaya Tritiya"),
+    ("2027-07-15", "తొలి ఏకాదశి", "Tholi Ekadasi"), ("2027-07-19", "గురు పౌర్ణమి", "Guru Pournami"),
+    ("2027-08-13", "వరలక్ష్మీ వ్రతం", "Varalakshmi Vratam"), ("2027-08-17", "రాఖీ పౌర్ణమి", "Raksha Bandhan"),
+    ("2027-08-25", "శ్రీ కృష్ణాష్టమి", "Krishnashtami"), ("2027-09-04", "వినాయక చవితి", "Vinayaka Chavithi"),
+    ("2027-09-30", "బతుకమ్మ ప్రారంభం", "Bathukamma begins"), ("2027-10-01", "దేవీ నవరాత్రులు", "Devi Navaratri"),
+    ("2027-10-10", "విజయదశమి (దసరా)", "Dussehra"), ("2027-10-29", "దీపావళి", "Deepavali"),
+    ("2027-11-02", "నాగుల చవితి", "Nagula Chavithi"), ("2027-11-13", "కార్తీక పౌర్ణమి", "Karthika Pournami")]
+# special weekdays of some months (Monday=0)
+MONTH_WEEKDAYS = {"Karthika": {0: "కార్తీక సోమవారం"}, "Margasira": {3: "మార్గశిర లక్ష్మీవారం (గురువారం)"},
+                  "Sravana": {4: "శ్రావణ శుక్రవారం", 0: "శ్రావణ సోమవారం"}, "Ashadha": {6: "ఆషాఢ బోనాలు ఆదివారం"}}
+DEVOTION_STYLE = ("Beautiful traditional South Indian devotional photograph, warm golden light of brass oil lamps (diyas), "
+                  "marigold and jasmine flowers, rangoli, banana leaves, brass and copper pooja items, temple architecture, "
+                  "rich festive colours, sharp focus, high detail, peaceful and auspicious mood, the main subject large and "
+                  "clear. No deity faces in close-up, no people's faces, no text, no letters, no watermark, no logos")
+
+
+def telugu_today(now=None):
+    """What is special today in the Telugu calendar: month, paksha, weekday specials, festivals today / coming up."""
+    now = now or dt.datetime.now(IST)
+    today = now.date()
+    month = None
+    for start, te, en in TELUGU_MONTHS:
+        s = dt.date.fromisoformat(start)
+        if s <= today:
+            month = (te, en, (today - s).days)
+    if month and month[2] > 31:
+        month = None   # past the end of the table
+    info = {"date": today.isoformat(), "weekday": now.strftime("%A"), "month_te": month[0] if month else "",
+            "month_en": month[1] if month else "", "paksha": "", "special_day": "", "festivals": []}
+    if month:
+        day = month[2]
+        info["paksha"] = ("శుక్ల పక్షం (పౌర్ణమి వైపు)" if day <= 15 else "బహుళ పక్షం (అమావాస్య వైపు)")
+        info["special_day"] = MONTH_WEEKDAYS.get(month[1], {}).get(today.weekday(), "")
+    if dt.date(today.year, 12, 16) <= today or today <= dt.date(today.year, 1, 14):
+        info["season"] = "ధనుర్మాసం (Dhanurmasam: Tiruppavai, Goda Devi, early-morning muggulu)"
+    for d_, te, en in FESTIVALS:
+        gap = (dt.date.fromisoformat(d_) - today).days
+        if -1 <= gap <= 6:
+            info["festivals"].append({"te": te, "en": en, "in_days": gap})
+    return info
+
+
+def devotional_concept(info, angle, used_titles):
+    fest = "; ".join(f"{f['en']} / {f['te']} " + ("(today)" if f["in_days"] == 0 else "(yesterday)" if f["in_days"] < 0
+                     else f"(in {f['in_days']} days)") for f in info["festivals"]) or "none this week"
+    prompt = f"""You run a popular Telugu devotional Instagram page (Hindu festivals, poojas, traditions, prasadam).
+Today: {info['date']} ({info['weekday']}). Telugu month: {info['month_en']} masam / {info['month_te']} మాసం
+{info['paksha']}. Special day today: {info['special_day'] or 'none'}. Season: {info.get('season', 'none')}.
+Festivals now / coming up: {fest}.
+(If the month is empty, work out the current Telugu month yourself from the date.)
+
+Make ONE swipeable image post (carousel) on this angle: {angle}
+It must feel timely ("now", "this month", "this week") so Telugu families save and share it.
+Content rules: traditional, widely-followed beliefs and customs as practised in Andhra Pradesh and Telangana, said
+respectfully ("అంటారు", "పెద్దలు చెబుతారు" for beliefs). Simple, practical, positive. NO exact dates, times, muhurtham or
+tithi timings, no astrology predictions, no fear or curses, no medical claims, nothing against any community or sect.
+Do NOT repeat these earlier posts: {json.dumps(used_titles[-40:], ensure_ascii=False)}
+
+Text (printed big on the cards): natural Telugu, no English letters. Cover hook: one catchy line of 5 to 12 words
+(question or "తప్పక తెలుసుకోండి" style). Then exactly 5 cards, each ONE sentence of 8 to 18 words (for food or item
+lists start with the item name then why/how, e.g. "ఉసిరికాయ: ...").
+Images: one English prompt per card showing that exact item/ritual: lamps, pooja thali, rangoli, temples, tulasi
+plant, river at dawn, festive foods on banana leaf, flowers. Do not show deities' faces up close or any person's face.
+
+Return ONLY JSON:
+{{"title": "short Telugu title", "hook": "Telugu cover line", "hook_image": "English image prompt",
+"facts": [{{"line": "Telugu card sentence", "image": "English image prompt"}}, ... exactly 5],
+"caption": "warm Telugu post text (max 22 words) that makes people save and share",
+"question": "short Telugu question for comments", "search": "Telugu and English search words, e.g. కార్తీక మాసం | Karthika Masam",
+"tag": "one popular English hashtag for this festival or month, e.g. #karthikamasam"}}"""
+    for attempt in range(3):
+        try:
+            raw = json.loads(re.sub(r"^```(?:json)?|```$", "", llm_json_text(prompt).strip(), flags=re.M).strip())
+            facts = [f for f in raw.get("facts", []) if isinstance(f, dict) and TELUGU_RE.search(str(f.get("line", "")))
+                     and len(str(f.get("image", ""))) > 15][:5]
+            assert len(facts) >= 4, "cards missing"
+            lines = [str(raw.get("hook", ""))] + [str(f["line"]) for f in facts]
+            assert all(TELUGU_RE.search(x) for x in lines + [str(raw.get("title", "")), str(raw.get("caption", ""))]), "Telugu missing"
+            assert not any(LATIN_RE.search(x) for x in lines), "card text has English letters"
+            assert all(3 <= len(x.split()) <= 24 for x in lines), "card text too long or short"
+            assert not TELUGU_RE.search(" ".join(str(f["image"]) for f in facts) + str(raw.get("hook_image", ""))), "image prompts must be English"
+            if any(_sim(raw["title"], t) > 0.6 for t in used_titles):
+                raise ValueError("too similar to an earlier post")
+            raw["facts"] = facts
+            return raw
+        except Exception as e:
+            print(f"Devotional post attempt {attempt + 1} failed: {e}")
+            time.sleep(8 * (attempt + 1))
+    return None
+
+
+def devotional_angles(info):
+    m = f"{info['month_en']} masam ({info['month_te']} మాసం)" if info["month_en"] else "the current Telugu month"
+    near = [f for f in info["festivals"] if 0 <= f["in_days"] <= 3]
+    angles = []
+    if near:
+        f = f"{near[0]['en']} ({near[0]['te']})"
+        angles += [f"{f}: why it is celebrated and its significance", f"{f}: simple pooja at home, step by step",
+                   f"{f}: traditional naivedyam / prasadam and special foods made that day",
+                   f"{f}: what to do and what not to do that day"]
+    if info["special_day"]:
+        angles.append(f"today is {info['special_day']}: what devotees do today and why it is special")
+    angles += [f"{m}: why this month is special and what people do every day of it",
+               f"{m}: foods traditionally eaten in this month and why (satvik, seasonal)",
+               f"{m}: foods and habits people avoid in this month and the reason behind it",
+               f"{m}: deepam / lamp lighting customs and their meaning",
+               f"{m}: simple daily pooja and good habits for the whole family"]
+    if info.get("season"):
+        angles.append(f"{info['season']}: its customs and their meaning")
+    for f in info["festivals"]:
+        if f["in_days"] > 3:
+            angles.append(f"{f['en']} ({f['te']}) is coming in {f['in_days']} days: how to get ready")
+    return angles
+
+
+def generate_devotional_post(state, ig_titles):
+    """Telugu devotional carousel about the current month / festival. Returns True if out/post/ is ready."""
+    try:
+        if not features.check("raqm"):
+            print("Devotional post skipped: Telugu text shaping (raqm) is not available on this machine.")
+            return False
+        info = telugu_today()
+        print(f"Telugu calendar: {info['month_en']} masam, {info['weekday']}, special: {info['special_day'] or '-'}, "
+              f"festivals: {[(f['en'], f['in_days']) for f in info['festivals']] or '-'}")
+        used = [u.get("title", "") for u in state["used"]] + [re.sub(r"^[^\w]+", "", t).strip() for t in ig_titles]
+        angles = devotional_angles(info)
+        now = dt.datetime.now(IST)
+        start = (now.timetuple().tm_yday * 8 + now.hour // 3) % len(angles)   # a different angle every slot
+        if any(f["in_days"] == 0 for f in info["festivals"]) and now.hour < 12:
+            start = 0   # festival morning: lead with the festival itself
+        idea = None
+        for angle in (angles[start:] + angles[:start])[:2]:
+            print(f"Devotional angle: {angle}")
+            idea = devotional_concept(info, angle, [t for t in used if t])
+            if idea:
+                break
+        if not idea:
+            return False
+        print(f"Devotional post: {idea['title']}")
+        idea["kind"] = "devotional"
+        idea["month_tag"] = f"#{info['month_en'].lower()}masam" if info["month_en"] else ""
+        return build_carousel(idea, DEVOTION_STYLE, "devotional post")
+    except Exception as e:
+        print(f"Devotional post failed: {str(e)[:500]}")
+        return False
+
+
+SLOT_PLAN_DEFAULT = "0:post,3:post,6:animated,9:queued,12:animated,15:queued,18:post,21:post"
 
 
 def slot_task():
     """What this run makes: REEL_FORMAT, or the 3-hour slot's task from SLOT_PLAN (UTC hour: task)."""
     fmt = os.getenv("REEL_FORMAT", "auto").strip().lower()
-    if fmt in ("animated", "queued", "trending", "post"):
+    if fmt in ("animated", "queued", "trending", "post", "factpost"):
         return fmt
     now = dt.datetime.now(dt.timezone.utc)
     slot = round((now.hour + now.minute / 60) / 3) * 3 % 24   # a late-starting run still counts as its slot
@@ -3251,7 +3436,7 @@ def slot_task():
         h, _, task = item.partition(":")
         if h.strip().isdigit():
             plan[int(h)] = task.strip().lower()
-    return plan.get(slot, "trending")
+    return plan.get(slot, "post")
 
 
 # -------------------------------- manual mode: you make the clip with your own Gemini plan, the bot does the rest
@@ -3523,16 +3708,17 @@ def generate():
     if omni_wanted() and generate_omni(state, ig):
         return
     if os.getenv("PIXAR_STORIES") == "1" and os.getenv("PIXAR_FORMAT", "short") == "short":
-        # every 3 hours: animated story at the peak slots (Kaggle GPU), trending "మీకు తెలుసా?" reel in the others
+        # every 3 hours: animated story reels (Kaggle GPU) at the peak slots, devotional image posts in the others
         task = slot_task()
         print(f"THIS RUN: {task}")
-        made = {"post": generate_fact_post, "queued": post_queued, "trending": generate_trend_reel,
-                "animated": generate_pixar_short}.get(task, generate_trend_reel)(state, ig)
+        made = {"post": generate_devotional_post, "factpost": generate_fact_post, "queued": post_queued,
+                "trending": generate_trend_reel, "animated": generate_pixar_short}.get(task, generate_devotional_post)(state, ig)
         if made:
             return
-        if task in ("animated", "queued", "post") and os.getenv("FALLBACK_TRENDING", "1") == "1":
-            print(f"Nothing from '{task}' this slot: posting a trending fact reel instead.")
-            if generate_trend_reel(state, ig):
+        # a story reel that could not be made: a devotional post keeps the slot filled (no fact reels)
+        if task in ("animated", "queued") and os.getenv("FALLBACK_POST", "1") == "1":
+            print(f"Nothing from '{task}' this slot: posting a devotional image post instead.")
+            if generate_devotional_post(state, ig):
                 return
         print("Nothing made this run; the next scheduled run will try again.")
         set_output("has_post", "false")
@@ -3747,8 +3933,8 @@ if __name__ == "__main__":
     if cmd == "prompts":
         write_prompts()
         sys.exit(0)
-    if cmd in ("trend", "post"):   # one trending fact reel / fact image post in out/ (not posted)
-        os.environ.update(PIXAR_STORIES="1", PIXAR_FORMAT="short", REEL_FORMAT="trending" if cmd == "trend" else "post")
+    if cmd in ("trend", "post", "factpost"):   # one trending fact reel / devotional post / fact post in out/ (not posted)
+        os.environ.update(PIXAR_STORIES="1", PIXAR_FORMAT="short", REEL_FORMAT="trending" if cmd == "trend" else cmd)
         generate()
         sys.exit(0)
     if cmd in ("pixar-reel", "short"):   # AI writes a new idea and it becomes a reel in out/reel.mp4 (not posted)

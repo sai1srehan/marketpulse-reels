@@ -6,10 +6,11 @@ on:
       - "inbox/**"
   schedule:
     # something every 3 hours (SLOT_PLAN, India time):
-    #   05:30 image post | 08:30 image post | 11:30 Kaggle makes 2 animated reels -> reel 1 posts ~1:30 PM
+    #   05:30 devotional post | 08:30 devotional post | 11:30 Kaggle makes 2 story reels -> reel 1 posts ~1:30 PM
     #   14:30 reel 2 (saved) | 17:30 Kaggle makes 2 more -> reel 3 posts ~7:30 PM | 20:30 reel 4 (saved)
-    #   23:30 trending fact reel | 02:30 image post
-    # = 5 reels (4 animated) + 3 image posts a day; 2 Kaggle sessions a day stay inside the free 30 GPU hours a week.
+    #   23:30 devotional post | 02:30 devotional post
+    # = 4 animated story reels + 4 devotional image posts (month, festival, pooja, foods) a day;
+    # 2 Kaggle sessions a day stay inside the free 30 GPU hours a week.
     - cron: "0 */3 * * *"
   workflow_dispatch:
     inputs:
@@ -18,9 +19,9 @@ on:
         type: boolean
         default: true
       format:
-        description: "auto = by time slot; animated = 2 Kaggle story reels; queued = post the saved reel; trending = fact reel; post = image post"
+        description: "auto = by time slot; animated = 2 Kaggle story reels; queued = post the saved reel; post = devotional image post; factpost = fact image post; trending = fact reel"
         type: choice
-        options: [auto, animated, queued, trending, post]
+        options: [auto, animated, queued, post, factpost, trending]
         default: auto
 
 permissions:
@@ -86,7 +87,7 @@ jobs:
           REEL_FORMAT: ${{ inputs.format || 'auto' }}
           SLOT_PLAN: ${{ vars.SLOT_PLAN }}
           REELS_PER_RUN: ${{ vars.REELS_PER_RUN || '2' }}
-          FALLBACK_TRENDING: ${{ vars.FALLBACK_TRENDING || '1' }}
+          FALLBACK_POST: ${{ vars.FALLBACK_POST || '1' }}
           SHORT_BEATS: ${{ vars.SHORT_BEATS || '4' }}
           SHORT_STEPS: ${{ vars.SHORT_STEPS || '4' }}
           PIXAR_CLIPS: ${{ vars.PIXAR_CLIPS || '0' }}
