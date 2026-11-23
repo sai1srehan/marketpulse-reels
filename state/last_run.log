@@ -1,14 +1,14 @@
-run at 2026-11-23T09:12:53.031320+00:00 event=workflow_dispatch
+run at 2026-11-23T10:19:22.404779+00:00 event=schedule
 MODE: PIXAR_STORIES=1 MANUAL_VIDEOS=0 OMNI_VIDEOS=0 | story AI: Gemini | images: free Pollinations
 THIS RUN: queued
 No queued reel waiting (the last Kaggle run made only one, or it was already posted).
-Nothing from 'queued' this slot: posting a trending fact reel instead.
-Trending now (25): satya nadella | sensex nifty stock market | డింపుల్ హయాతి | sa vs ban | విజయ్ | hong kong vs afghanistan a | అయోధ్య | thanksgiving 2026 | నవంబర్ 23 | thanksgiving day 2026 | south africa vs bangladesh | sabarimala
-Gemini gemini-3.8-flash error: HTTPSConnectionPool(host='generativelanguage.googleapis.com', port=443): Read timed out. (read timeout=100)
-Gemini gemini-3.7-flash busy (503), retrying
-Gemini gemini-3.7-flash busy (503), retrying
-Gemini gemini-3.7-flash busy (503), retrying
-Gemini gemini-3.7-flash failed: 503 {
+Nothing from 'queued' this slot: posting a devotional image post instead.
+Telugu calendar: Karthika masam, Monday, special: కార్తీక సోమవారం, festivals: [('Karthika Pournami', 1)]
+Devotional angle: Karthika Pournami (కార్తీక పౌర్ణమి): simple pooja at home, step by step
+Gemini gemini-3.8-flash busy (503), retrying
+Gemini gemini-3.8-flash busy (503), retrying
+Gemini gemini-3.8-flash busy (503), retrying
+Gemini gemini-3.8-flash failed: 503 {
   "error": {
     "code": 503,
     "message": "This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.",
@@ -16,25 +16,24 @@ Gemini gemini-3.7-flash failed: 503 {
   }
 }
 
+Gemini gemini-3.7-flash busy (503), retrying
+Gemini gemini-3.7-flash busy (503), retrying
+Gemini gemini-3.7-flash error: HTTPSConnectionPool(host='generativelanguage.googleapis.com', port=443): Read timed out. (read timeout=100)
 Story written by Gemini (gemini-3.6-flash)
-Trend reel: క్రికెట్ గురించి వింత విషయాలు (trend: టెస్ట్ క్రికెట్)
-  picture 1/6 ready
+Devotional post: ఇంట కార్తీక పౌర్ణమి పూజ
+  card 1/6 ready
   waiting 42s for the free image tier
-  picture 2/6 ready
-  waiting 41s for the free image tier
-  picture 3/6 ready
-  waiting 41s for the free image tier
-  picture 4/6 ready
+  card 2/6 ready
   waiting 42s for the free image tier
+  card 3/6 ready
+  waiting 41s for the free image tier
+  card 4/6 ready
+  waiting 42s for the free image tier
+  card 5/6 ready
+  waiting 41s for the free image tier
   image attempt 1 failed: 503 {"status":503,"success":false,"error":{"code":"SERVICE_UNAVAILABLE","message":"The Classic API is at its limit right now. Retry after 10s, or get full
   waiting 45s for the free image tier
   image attempt 2 failed: 503 {"status":503,"success":false,"error":{"code":"SERVICE_UNAVAILABLE","message":"The Classic API is at its limit right now. Retry after 10s, or get full
   waiting 45s for the free image tier
-  picture 5/6 ready
-  waiting 43s for the free image tier
-  image attempt 1 failed: 503 {"status":503,"success":false,"error":{"code":"SERVICE_UNAVAILABLE","message":"The Classic API is at its limit right now. Retry after 10s, or get full
-  waiting 44s for the free image tier
-  picture 6/6 ready
-Music: synthesized playful instrumental
-Trend reel 37.4s, 6 pictures
-Built out/reel.mp4 with trending fact reel (11.9 MB)
+  card 6/6 ready
+Built out/post/ with a 6-card devotional post
