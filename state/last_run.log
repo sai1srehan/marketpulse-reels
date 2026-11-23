@@ -1,95 +1,31 @@
-run at 2026-11-23T01:35:55.269353+00:00 event=schedule
+run at 2026-11-23T07:07:23.092675+00:00 event=workflow_dispatch
 MODE: PIXAR_STORIES=1 MANUAL_VIDEOS=0 OMNI_VIDEOS=0 | story AI: Gemini | images: free Pollinations
-Gemini gemini-3.8-flash busy (503), retrying
+REEL FORMAT this run: trending
+Trending now (24): విజయ్ | hong kong vs afghanistan a | కార్తీక దీపం | అయోధ్య | thanksgiving 2026 | నవంబర్ 23 | thanksgiving day 2026 | tata steel apl apollo | bisleri | wtc points table | sabarimala | sabarimala virtual q
 Gemini gemini-3.8-flash error: HTTPSConnectionPool(host='generativelanguage.googleapis.com', port=443): Read timed out. (read timeout=100)
-Gemini gemini-3.7-flash busy (503), retrying
-Gemini gemini-3.7-flash busy (503), retrying
-Gemini gemini-3.7-flash busy (503), retrying
-Gemini gemini-3.7-flash failed: 503 {
+Gemini gemini-3.7-flash failed: 429 {
   "error": {
-    "code": 503,
-    "message": "This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.",
-    "status": "UNAVAILABLE"
-  }
-}
-
+    "code": 429,
+    "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://aistudio.google.com/do
 Story written by Gemini (gemini-3.6-flash)
-Short idea: ఎడారిలో చిన్ని సొంత నడక | Chinni is a tiny golden-yellow desert fox with massive ears, wearing a bright red scarf and possessing huge expressive eyes. | Bujji is a chubby light-blue baby camel wearing a bright green cap and possessing friendly round eyes.
-Story: రాజస్థాన్ ఎడారిలో చిన్ని నక్క తానూ ఒంటెలా పెద్ద అడుగులు వేయాలని తాపత్రయపడింది. / కిందపడి బాధపడుతున్న చిన్నిని చూసి బుజ్జి ఒంటె ఎంతో జాలితో దగ్గరకు వచ్చింది. / బుజ్జి సైగ చేయగానే చిన్ని తన సొంత శైలిలో వేగంగా గంతులు వేయడం మొదలుపెట్టింది. / వేరొకరిలా మారడం కంటే నీలా నువ్వు ఉన్నప్పుడే నిజమైన ఆనందం లభిస్తుందని చిన్ని గ్రహించింది. / నీతి: ఇతరులను పోలి ఉండటం కంటే మన సహజ శైలిని గౌరవించడమే అసలైన గొప్పతనం.
-  scene 1 picture via pollinations
-  waiting 41s for the free image tier
-  scene 2 picture ready
-  waiting 41s for the free image tier
-  scene 3 picture ready
-  waiting 41s for the free image tier
-  scene 4 picture ready
-  Kaggle push: Kernel version 21 successfully pushed.  Please check progress at https://www.kaggle.com/code/saisrehan1/telugu-reel-video
-  Kaggle GPU working... 1 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 2 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 4 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 5 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 7 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 8 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 10 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 11 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 13 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 14 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 16 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 17 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 19 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 20 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 22 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 23 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 25 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 26 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 28 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 29 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 31 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 32 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 34 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 35 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 37 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 38 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 40 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 41 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 43 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 44 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 46 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 47 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 49 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 50 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 52 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 53 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 55 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 56 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 58 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 59 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 61 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 62 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle GPU working... 64 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
-  Kaggle finished: saisrehan1/telugu-reel-video has status "KernelWorkerStatus.COMPLETE"
-  Kaggle notebook log (last lines):
-    GPUs: 2 x Tesla T4 | setup 49 s
-    scene size 544 x 960
-    [transformers] Token indices sequence length is longer than the specified maximum sequence length for this model (227 > 77). Running this sequence through the model will result in indexing errors
-    [transformers] Token indices sequence length is longer than the specified maximum sequence length for this model (227 > 77). Running this sequence through the model will result in indexing errors
-    start pictures made on the GPU: 4 at 139 s
-    prompts encoded 225 s
-    [gpu0] video model on GPU, free GB: 7.4 | scenes [1, 3]
-    [gpu0] out of GPU memory at 544x960, 81 frames (in attention_dispatch.py:3850 _native_attention <- attention_dispatch.py:439 dispatch_attention_fn <- transformer_wan.py:143 __call__ <- transformer_wan
-    [gpu0] out of GPU memory at 480x832, 81 frames (in attention_dispatch.py:3850 _native_attention <- attention_dispatch.py:439 dispatch_attention_fn <- transformer_wan.py:143 __call__ <- transformer_wan
-    [gpu1] video model on GPU, free GB: 7.6 | scenes [2, 4]
-    [gpu1] out of GPU memory at 544x960, 81 frames (in attention_dispatch.py:3850 _native_attention <- attention_dispatch.py:439 dispatch_attention_fn <- transformer_wan.py:143 __call__ <- transformer_wan
-    [gpu1] out of GPU memory at 480x832, 81 frames (in attention_dispatch.py:3850 _native_attention <- attention_dispatch.py:439 dispatch_attention_fn <- transformer_wan.py:143 __call__ <- transformer_wan
-    [gpu0] Traceback (most recent call last):
-    [gpu0] File "/tmp/worker.py", line 62, in <module>
-    [gpu0] lat = pipe(image=src.resize((w, h), Image.LANCZOS), prompt_embeds=pe.to("cuda"),
-    [gpu0] negative_prompt_embeds=ne.to("cuda"), height=h, width=w, num_frames=nf,
-    [gpu0] RuntimeError: cusolver error: CUSOLVER_STATUS_INTERNAL_ERROR, when calling `cusolverDnCreate(handle)`. If you keep seeing this error, you may use `torch.backends.cuda.preferred_linalg_library()
-    [gpu1] scene 2 done in 1653 s (at 2185 s)
-    [gpu1] scene 4 done in 1678 s (at 3863 s)
-    workers finished with exit codes [1, 0] at 3890 s
-  Kaggle made 2 animated scene(s) in 65 min
+Trend reel: బంగారం గురించి విచిత్రాలు (trend: today gold rate)
+  image attempt 1 failed: 503 {"status":503,"success":false,"error":{"code":"SERVICE_UNAVAILABLE","message":"The Classic API is at its limit right now. Retry after 10s, or get full
+  waiting 45s for the free image tier
+  picture 1/6 ready
+  waiting 42s for the free image tier
+  picture 2/6 ready
+  waiting 42s for the free image tier
+  image attempt 1 failed: 503 {"status":503,"success":false,"error":{"code":"SERVICE_UNAVAILABLE","message":"The Classic API is at its limit right now. Retry after 10s, or get full
+  waiting 45s for the free image tier
+  picture 3/6 ready
+  waiting 42s for the free image tier
+  picture 4/6 ready
+  waiting 43s for the free image tier
+  image attempt 1 failed: 503 {"status":503,"success":false,"error":{"code":"SERVICE_UNAVAILABLE","message":"The Classic API is at its limit right now. Retry after 10s, or get full
+  waiting 45s for the free image tier
+  picture 5/6 ready
+  waiting 42s for the free image tier
+  picture 6/6 ready
 Music: synthesized playful instrumental
-Animated short failed: operands could not be broadcast together with shapes (830319,) (830320,) 
-Animated short not made this run; nothing posted. The next scheduled run will try again.
+Trend reel 35.8s, 6 pictures
+Built out/reel.mp4 with trending fact reel (11.4 MB)
