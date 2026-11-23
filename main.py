@@ -2190,9 +2190,8 @@ def generate_omni(state, ig_titles):
     return post_idea(idea, "omni-", "Gemini Omni")
 
 
-def post_idea(idea, id_prefix, engine):
-    """Caption, hashtags and meta.json for a finished out/reel.mp4 made from an idea dict (Omni or animated short)."""
-    now = dt.datetime.now(IST)
+def build_caption(idea, post=False):
+    """Instagram caption + hashtags for a story reel, a fact reel (kind=facts) or a fact image post (post=True)."""
     # Instagram allows at most 5 hashtags: big, relevant tags beat many tiny ones. 4 proven reach tags + 1 that rotates
     # (the story's own theme tag when it is a popular one), so posts don't all look identical to the algorithm.
     limit = int(os.getenv("HASHTAG_LIMIT", "5"))
@@ -2212,18 +2211,25 @@ def post_idea(idea, id_prefix, engine):
         if tg not in tag_list:
             tag_list.append(tg)
     if facts:
-        caption = "\n".join([f"🤯 {idea['title']}", "", idea["caption"], "",
-                             "ఈ రీల్ మీ ఫ్రెండ్‌కి పంపండి 💌", (idea.get("question") or "మీకు ఇది ముందే తెలుసా?") + " 👇",
-                             "రోజూ ఇలాంటి ఆసక్తికరమైన విషయాల కోసం ఫాలో అవ్వండి ❤️", "",
-                             "మీకు తెలుసా | తెలుగు ఫ్యాక్ట్స్ | Telugu facts | Did you know", "",
-                             " ".join(tag_list[:limit])])[:2200]
-    else:
-        caption = "\n".join([f"📖 {idea['title']}", "", idea["caption"], "", f"నీతి: {idea['moral']}", "",
-                         "ఈ రీల్ మీ స్నేహితుడికి పంపండి 💌", (idea.get("question") or "మీకు నచ్చిందా? కామెంట్‌లో చెప్పండి") + " 👇",
-                         "రోజూ కొత్త కథల కోసం ఫాలో అవ్వండి ❤️", "",
-                         # Instagram search reads caption words, so name what the reel is in both languages
-                         "తెలుగు నీతి కథలు | Telugu moral stories | Telugu animated kids story", "",
-                         " ".join(tag_list[:limit])])[:2200]
+        return "\n".join([f"🤯 {idea['title']}", "", idea["caption"], ""] +
+                         (["స్వైప్ చేసి అన్నీ చూడండి 👉"] if post else []) +
+                         [f"ఈ {'పోస్ట్' if post else 'రీల్'} మీ ఫ్రెండ్‌కి పంపండి 💌",
+                          (idea.get("question") or "మీకు ఇది ముందే తెలుసా?") + " 👇",
+                          "రోజూ ఇలాంటి ఆసక్తికరమైన విషయాల కోసం ఫాలో అవ్వండి ❤️", "",
+                          "మీకు తెలుసా | తెలుగు ఫ్యాక్ట్స్ | Telugu facts | Did you know", "",
+                          " ".join(tag_list[:limit])])[:2200]
+    return "\n".join([f"📖 {idea['title']}", "", idea["caption"], "", f"నీతి: {idea['moral']}", "",
+                      "ఈ రీల్ మీ స్నేహితుడికి పంపండి 💌", (idea.get("question") or "మీకు నచ్చిందా? కామెంట్‌లో చెప్పండి") + " 👇",
+                      "రోజూ కొత్త కథల కోసం ఫాలో అవ్వండి ❤️", "",
+                      # Instagram search reads caption words, so name what the reel is in both languages
+                      "తెలుగు నీతి కథలు | Telugu moral stories | Telugu animated kids story", "",
+                      " ".join(tag_list[:limit])])[:2200]
+
+
+def post_idea(idea, id_prefix, engine):
+    """Caption, hashtags and meta.json for a finished out/reel.mp4 made from an idea dict (Omni or animated short)."""
+    now = dt.datetime.now(IST)
+    caption = build_caption(idea)
     name = f"reel-{now.strftime('%Y%m%d-%H%M')}.mp4"
     (OUT / "meta.json").write_text(json.dumps({"caption": caption, "video_name": name,
                                                "story_id": id_prefix + hashlib.md5(idea["title"].encode()).hexdigest()[:8],
@@ -2305,21 +2311,15 @@ t0 = time.time()
 JOB = json.loads(base64.b64decode("__JOB__").decode())
 subprocess.run([sys.executable, "-m", "pip", "install", "-q", "-U", "diffusers>=0.35", "transformers>=4.51",
                 "accelerate>=1.6", "ftfy", "sentencepiece", "imageio", "imageio-ffmpeg", "spandrel"], check=True)
-import numpy as np
-import torch
-from PIL import Image
-from diffusers import AutoencoderKLWan, WanImageToVideoPipeline
-from diffusers.utils import export_to_video
 import gc
+import torch
+from diffusers import WanImageToVideoPipeline
 ngpu = torch.cuda.device_count()
-print("GPUs:", ngpu, "x", torch.cuda.get_device_name(0), "| setup", round(time.time() - t0), "s", flush=True)
-# two T4s render scenes side by side, so the time saved goes into a sharper picture
-JOB["width"], JOB["height"] = JOB["size_multi"] if ngpu >= 2 else JOB["size_single"]
 JOB["t0"] = t0
-print("scene size", JOB["width"], "x", JOB["height"], flush=True)
+print("GPUs:", ngpu, "x", torch.cuda.get_device_name(0), "| reels:", len(JOB["chains"]), "| scene size",
+      JOB["size"][0], "x", JOB["size"][1], "| setup", round(time.time() - t0), "s", flush=True)
 dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
-# 0) sharp, cute start pictures on the GPU (DreamShaper XL Turbo, free and open); the bot's pictures are the fallback
-KEYS = []
+# 0) one cute opening picture per reel on the GPU (DreamShaper XL Turbo, free and open); the bot's picture is the fallback
 if JOB.get("image_model"):
     try:
         from diffusers import StableDiffusionXLPipeline, DPMSolverMultistepScheduler
@@ -2338,7 +2338,11 @@ if JOB.get("image_model"):
                         requires_pooled=[False, True], truncate_long_prompts=False)
         except Exception as e:
             print("long prompts unavailable:", e, flush=True)
-        for i, p in enumerate(JOB["image_prompts"]):
+        made = 0
+        for k, ch in enumerate(JOB["chains"]):
+            p = ch.get("image_prompt")
+            if not p:
+                continue
             kw = dict(prompt=p, negative_prompt=JOB["image_neg"])
             if cp is not None:
                 try:
@@ -2355,33 +2359,36 @@ if JOB.get("image_model"):
             with torch.no_grad():
                 im = sd(**kw, width=JOB["image_size"][0], height=JOB["image_size"][1],
                         num_inference_steps=JOB["image_steps"], guidance_scale=JOB["image_cfg"],
-                        generator=torch.Generator("cuda").manual_seed(JOB["seed"])).images[0]
-            im.save("/kaggle/working/scene%d.png" % (i + 1))
+                        generator=torch.Generator("cuda").manual_seed(ch["seed"])).images[0]
+            im.save("/kaggle/working/c%d_start.png" % k)
             buf = io.BytesIO()
             im.save(buf, "JPEG", quality=92)
-            KEYS.append(base64.b64encode(buf.getvalue()).decode())
-        print("start pictures made on the GPU:", len(KEYS), "at", round(time.time() - t0), "s", flush=True)
+            ch["image"] = base64.b64encode(buf.getvalue()).decode()
+            made += 1
+        print("opening pictures made on the GPU:", made, "at", round(time.time() - t0), "s", flush=True)
         del sd, cp
     except Exception as e:
-        print("GPU start pictures failed, using the bot's pictures:", str(e)[:300], flush=True)
+        print("GPU opening pictures failed, using the bot's pictures:", str(e)[:300], flush=True)
     gc.collect()
     torch.cuda.empty_cache()
-if KEYS and len(KEYS) == len(JOB["beats"]):
-    JOB["images"] = KEYS
 # 1) only the big text encoder on GPU 0: encode every prompt once, save the results, free it completely
 enc = WanImageToVideoPipeline.from_pretrained(JOB["model"], transformer=None, vae=None, torch_dtype=dtype)
 enc.text_encoder.to("cuda")
 EMBEDS = []
 with torch.no_grad():
-    for p in JOB["beats"]:
-        pe, ne = enc.encode_prompt(prompt=p, negative_prompt=JOB["neg"], do_classifier_free_guidance=True, device="cuda")
-        EMBEDS.append((pe.cpu(), ne.cpu()))
+    for ch in JOB["chains"]:
+        row = []
+        for p in ch["beats"]:
+            pe, ne = enc.encode_prompt(prompt=p, negative_prompt=JOB["neg"], do_classifier_free_guidance=True, device="cuda")
+            row.append((pe.cpu(), ne.cpu()))
+        EMBEDS.append(row)
 torch.save(EMBEDS, "/tmp/embeds.pt")
 del enc, EMBEDS
 gc.collect()
 torch.cuda.empty_cache()
 print("prompts encoded", round(time.time() - t0), "s", flush=True)
-# 2) one worker process per GPU, each animating its share of the scenes (every scene has its own start picture)
+# 2) one worker per GPU; each animates whole reels: every scene continues from the LAST frame of the previous one,
+#    so a reel is one continuous scene with the same characters
 WORKER = """
 import base64, io, json, os, sys, time
 import numpy as np
@@ -2390,7 +2397,7 @@ from PIL import Image
 from diffusers import AutoencoderKLWan, WanImageToVideoPipeline
 from diffusers.utils import export_to_video
 JOB = json.load(open("/tmp/job.json"))
-idx = json.loads(sys.argv[1])
+mine = json.loads(sys.argv[1])
 try:   # T4 has no flash attention: memory-efficient attention never builds the full attention matrix
     torch.backends.cuda.enable_flash_sdp(False)
     torch.backends.cuda.enable_mem_efficient_sdp(True)
@@ -2412,14 +2419,13 @@ try:
     pipe.vae.enable_tiling()
 except Exception as e:
     print("vae tiling unavailable:", e)
-print("video model on GPU, free GB:", round(torch.cuda.mem_get_info()[0] / 1e9, 1), "| scenes", [i + 1 for i in idx], flush=True)
-# memory-efficient attention: the default could fall back to the "math" kernel that builds the whole attention matrix
+print("video model on GPU, free GB:", round(torch.cuda.mem_get_info()[0] / 1e9, 1), "| reels", mine, flush=True)
 try:
     pipe.transformer.set_attention_backend("_native_efficient")
     print("attention: memory-efficient", flush=True)
 except Exception as e:
     print("memory-efficient attention unavailable:", str(e)[:200], flush=True)
-# AI upscaler (Real-ESRGAN x2): 544x960 frames become sharp 1088x1920
+# AI upscaler (Real-ESRGAN x2) for sharp frames
 UP = None
 if JOB.get("upscale"):
     try:
@@ -2461,78 +2467,73 @@ def decode(lat):
             frames = pipe.video_processor.postprocess_video(video, output_type="pil")[0]
             del video, lat
             torch.cuda.empty_cache()
+        last = frames[-1].copy()   # the next scene continues from this native-size frame
         if UP is not None:
             try:
                 frames = upscale(frames)
             except Exception as e:
                 print("upscale skipped:", str(e)[:200], flush=True)
-        return frames
+        return frames, last
     finally:
         pipe.transformer.to("cuda")
-W, H, last_dur = JOB["width"], JOB["height"], 0
-tries = []
-for t in [(W, H, JOB["frames"]), (480, 832, JOB["frames"]), (480, 832, 49)]:
-    if t not in tries:
-        tries.append(t)
-for i in idx:
-    now = time.time() - JOB["t0"]
-    if last_dur and now + last_dur > JOB["budget"]:
-        print("time budget reached, skipping scene", i + 1, flush=True)
-        break
-    b0 = time.time()
-    src = Image.open(io.BytesIO(base64.b64decode(JOB["images"][min(i, len(JOB["images"]) - 1)]))).convert("RGB")
-    pe, ne = EMBEDS[i]
-    frames = None
-    for (w, h, nf) in list(tries):
-        failed = None
-        try:
-            lat = pipe(image=src.resize((w, h), Image.LANCZOS), prompt_embeds=pe.to("cuda"),
-                       negative_prompt_embeds=ne.to("cuda"), height=h, width=w, num_frames=nf,
-                       guidance_scale=JOB["guidance"], num_inference_steps=JOB["steps"], output_type="latent",
-                       generator=torch.Generator("cpu").manual_seed(JOB["seed"] + i)).frames
-            frames = decode(lat)
+def generate(img, pe, ne, w, h, nf, seed):
+    lat = pipe(image=img.resize((w, h), Image.LANCZOS), prompt_embeds=pe.to("cuda"), negative_prompt_embeds=ne.to("cuda"),
+               height=h, width=w, num_frames=nf, guidance_scale=JOB["guidance"], num_inference_steps=JOB["steps"],
+               output_type="latent", generator=torch.Generator("cpu").manual_seed(seed)).frames
+    return decode(lat)
+W, H = JOB["size"]
+tries = [(W, H, JOB["frames"])] + ([(W, H, 49)] if JOB["frames"] > 49 else [])
+last_dur = 0
+for c in mine:
+    ch = JOB["chains"][c]
+    img = Image.open(io.BytesIO(base64.b64decode(ch["image"]))).convert("RGB")
+    for i in range(len(ch["beats"])):
+        if last_dur and time.time() - JOB["t0"] + last_dur > JOB["budget"]:
+            print("time budget reached: reel %d stops after %d scenes" % (c + 1, i), flush=True)
             break
-        except torch.OutOfMemoryError:
-            failed = " <- ".join("%s:%d %s" % (f.filename.split("/")[-1], f.lineno, f.name)
-                                 for f in reversed(traceback.extract_tb(sys.exc_info()[2])[-4:]))
-        except RuntimeError as e:
-            if "kernel" in str(e).lower() and "attention" not in str(failed):
-                print("memory-efficient attention not possible here (%s): using the default" % str(e)[:150], flush=True)
-                pipe.transformer.set_attention_backend("native")
-                failed = "attention kernel"
-            else:
-                failed = "error: " + str(e)[:200]
-        # cleanup happens OUTSIDE the except block, so the failed attempt's GPU memory is really released
-        lat = None
-        gc.collect()
-        torch.cuda.empty_cache()
-        if failed == "attention kernel":
-            try:   # same size again with the default attention
-                lat = pipe(image=src.resize((w, h), Image.LANCZOS), prompt_embeds=pe.to("cuda"),
-                           negative_prompt_embeds=ne.to("cuda"), height=h, width=w, num_frames=nf,
-                           guidance_scale=JOB["guidance"], num_inference_steps=JOB["steps"], output_type="latent",
-                           generator=torch.Generator("cpu").manual_seed(JOB["seed"] + i)).frames
-                frames = decode(lat)
+        b0 = time.time()
+        pe, ne = EMBEDS[c][i]
+        frames = None
+        for (w, h, nf) in list(tries):
+            failed = None
+            try:
+                frames, img_next = generate(img, pe, ne, w, h, nf, ch["seed"] + i)
                 break
             except torch.OutOfMemoryError:
-                failed = "default attention"
-            lat = None
+                failed = " <- ".join("%s:%d %s" % (f.filename.split("/")[-1], f.lineno, f.name)
+                                     for f in reversed(traceback.extract_tb(sys.exc_info()[2])[-4:]))
+            except RuntimeError as e:
+                if "kernel" in str(e).lower():
+                    print("memory-efficient attention not possible here (%s): using the default" % str(e)[:150], flush=True)
+                    pipe.transformer.set_attention_backend("native")
+                    failed = "attention kernel"
+                else:
+                    failed = "error: " + str(e)[:200]
+            # cleanup OUTSIDE the except block, so the failed attempt's GPU memory is really released
             gc.collect()
             torch.cuda.empty_cache()
-        print("out of GPU memory at %dx%d, %d frames (in %s)" % (w, h, nf, failed), flush=True)
-        tries.remove((w, h, nf))   # never try a size that already failed again
-    if frames is None:
-        print("scene", i + 1, "failed at every size", flush=True)
-        continue
-    export_to_video(frames, "/kaggle/working/beat%d.mp4" % (i + 1), fps=JOB["fps"], quality=9)
-    frames = None
-    last_dur = time.time() - b0
-    print("scene %d done in %d s (at %d s)" % (i + 1, last_dur, time.time() - JOB["t0"]), flush=True)
+            if failed == "attention kernel":
+                try:
+                    frames, img_next = generate(img, pe, ne, w, h, nf, ch["seed"] + i)
+                    break
+                except torch.OutOfMemoryError:
+                    failed = "default attention"
+                gc.collect()
+                torch.cuda.empty_cache()
+            print("scene failed at %dx%d, %d frames (%s)" % (w, h, nf, failed), flush=True)
+            tries.remove((w, h, nf))   # never try a setting that already failed again
+        if frames is None:
+            print("reel %d stops after %d scenes (scene failed)" % (c + 1, i), flush=True)
+            break
+        export_to_video(frames, "/kaggle/working/c%d_beat%d.mp4" % (c, i + 1), fps=JOB["fps"], quality=9)
+        frames, img = None, img_next
+        last_dur = time.time() - b0
+        print("reel %d scene %d done in %d s (at %d s)" % (c + 1, i + 1, last_dur, time.time() - JOB["t0"]), flush=True)
 """
 os.makedirs("/kaggle/working", exist_ok=True)
 json.dump(JOB, open("/tmp/job.json", "w"))
 open("/tmp/worker.py", "w").write(WORKER)
-n = len(JOB["beats"])
+n = len(JOB["chains"])
 g = max(1, min(ngpu, n))
 procs = []
 for k in range(g):
@@ -2596,9 +2597,10 @@ SDXL_NEG = ("realistic, photo, photorealistic, creepy, scary, ugly, deformed, di
             "signature, 2d, anime, sketch, dark, gloomy")
 
 
-def kaggle_animate(key_pngs, motions, seed, workdir, image_prompts=None):
-    """Animate every beat from its own start picture in one Kaggle session (both T4 GPUs in parallel when available).
-    Returns the clip paths (beatN.mp4, N = beat number)."""
+def kaggle_animate(chains, workdir):
+    """chains: [{"key": png path, "image_prompt": str, "beats": [motion prompts], "seed": int}], one reel each.
+    One Kaggle session animates every reel (one per T4 GPU, in parallel); inside a reel each scene continues from the
+    last frame of the previous one (one continuous scene, like the Nov 20 reel). Returns {reel index: [clip paths]}."""
     import io
     slug = os.getenv("KAGGLE_KERNEL_SLUG", "telugu-reel-video")
     kid = f"{kaggle_user()}/{slug}"
@@ -2607,22 +2609,21 @@ def kaggle_animate(key_pngs, motions, seed, workdir, image_prompts=None):
     out.mkdir(parents=True, exist_ok=True)
     for old in list(work.glob("*.*")) + list(out.glob("*")):
         old.unlink()
-    single = _wh(os.getenv("KAGGLE_SIZE_SINGLE"), "480x832")   # one GPU: Wan 480p vertical
-    multi = _wh(os.getenv("KAGGLE_SIZE"), "544x960")           # two GPUs: sharper (multiples of 32)
-    imgs = []
-    for p in key_pngs:
+    size = _wh(os.getenv("KAGGLE_SIZE"), "480x832")   # Wan 480p vertical: proven on the T4; upscaled x2 afterwards
+    use_sdxl = os.getenv("KAGGLE_IMAGE_MODEL", "").lower() != "none"
+    jchains = []
+    for ch in chains:
         buf = io.BytesIO()
-        Image.open(p).convert("RGB").resize(tuple(multi), Image.LANCZOS).save(buf, "JPEG", quality=90)
-        imgs.append(base64.b64encode(buf.getvalue()).decode())
-    job = {"images": imgs, "beats": motions, "neg": VIDEO_NEG, "seed": seed,
-           "size_single": single, "size_multi": multi,
+        Image.open(ch["key"]).convert("RGB").resize(tuple(size), Image.LANCZOS).save(buf, "JPEG", quality=90)
+        jchains.append({"image": base64.b64encode(buf.getvalue()).decode(), "beats": ch["beats"], "seed": ch["seed"],
+                        "image_prompt": ch.get("image_prompt", "") if use_sdxl else ""})
+    job = {"chains": jchains, "neg": VIDEO_NEG, "size": size,
            "fps": 16, "frames": int(os.getenv("KAGGLE_FRAMES", "81")),   # 81 frames at 16 fps = 5 s
            "steps": int(os.getenv("KAGGLE_STEPS", "25")), "guidance": float(os.getenv("KAGGLE_GUIDANCE", "5")),
            "model": os.getenv("KAGGLE_MODEL", "Wan-AI/Wan2.2-TI2V-5B-Diffusers"),
-           # start pictures drawn on the GPU (set KAGGLE_IMAGE_MODEL=none to use the bot's Pollinations pictures)
-           "image_model": "" if os.getenv("KAGGLE_IMAGE_MODEL", "").lower() == "none" or not image_prompts
-                          else os.getenv("KAGGLE_IMAGE_MODEL") or "Lykon/dreamshaper-xl-v2-turbo",
-           "image_prompts": image_prompts or [], "image_neg": SDXL_NEG, "image_size": [768, 1344],
+           # opening pictures drawn on the GPU (set KAGGLE_IMAGE_MODEL=none to use the bot's Pollinations pictures)
+           "image_model": (os.getenv("KAGGLE_IMAGE_MODEL") or "Lykon/dreamshaper-xl-v2-turbo") if use_sdxl else "",
+           "image_neg": SDXL_NEG, "image_size": [768, 1344],
            # Real-ESRGAN x2 upscaler for sharp 1080p frames (KAGGLE_UPSCALER=none turns it off)
            "upscale": "" if os.getenv("KAGGLE_UPSCALER", "").lower() == "none" else os.getenv("KAGGLE_UPSCALER") or
                       "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.1/RealESRGAN_x2plus.pth",
@@ -2677,15 +2678,27 @@ def kaggle_animate(key_pngs, motions, seed, workdir, image_prompts=None):
             txt = "".join(x.get("data", "") for x in json.loads(txt))   # Kaggle logs are a JSON list of {data: ...}
         except Exception:
             pass
-        keep = ("GPU", "scene", "prompts", "worker", "pictures", "prompt", "attention", "upscale", "Error", "error", "Traceback", "memory", "budget")
+        keep = ("GPU", "scene", "prompts", "worker", "pictures", "prompt", "attention", "upscale", "Error", "error",
+                "Traceback", "memory", "budget", "reel")
         lines_ = [ln.strip() for ln in txt.replace("\r", "\n").split("\n") if ln.strip() and "%|" not in ln]
-        tail = [ln for ln in lines_ if any(k in ln for k in keep)][-25:] or lines_[-12:]
+        tail = [ln for ln in lines_ if any(k in ln for k in keep)][-30:] or lines_[-12:]
         print("  Kaggle notebook log (last lines):\n    " + "\n    ".join(x[:200] for x in tail))
-    clips = sorted(out.glob("beat*.mp4"), key=lambda p: int(re.sub(r"\D", "", p.stem) or 0))
-    if not clips:
+    result = {}
+    for k in range(len(chains)):
+        # scenes are chained, so only the unbroken run beat1, beat2, ... is usable
+        clips = []
+        while (out / f"c{k}_beat{len(clips) + 1}.mp4").exists():
+            clips.append(out / f"c{k}_beat{len(clips) + 1}.mp4")
+        if clips:
+            result[k] = clips
+            start = out / f"c{k}_start.png"
+            if start.exists():
+                chains[k]["start_png"] = start
+    if not result:
         raise RuntimeError(f"Kaggle finished without clips (status: {status[-120:]})")
-    print(f"  Kaggle made {len(clips)} animated scene(s) in {int(time.time() - t_start) // 60} min")
-    return clips
+    print(f"  Kaggle made " + ", ".join(f"reel {k + 1}: {len(v)} scenes" for k, v in result.items()) +
+          f" in {int(time.time() - t_start) // 60} min")
+    return result
 
 
 def last_frame(clip, png):
@@ -2719,13 +2732,12 @@ Rules: kid-friendly; no violence; no politics or religion; no real people; no br
 Do NOT reuse or imitate these titles: {json.dumps(used_titles[-40:], ensure_ascii=False)}
 and avoid these morals: {json.dumps(used_morals[-40:], ensure_ascii=False)}
 
-HOW IT IS MADE: {nb} shots of {secs:g} seconds, like a mini movie. Each shot starts from its own still picture ("scenes")
-which is then animated ("beats"). Same characters and same place in every shot, but vary the camera (wide, medium,
-close-up, over-the-shoulder) to tell the story. A scene describes the still picture: who is where, pose, facial
-expression, camera framing, the setting and light; characters big in the frame, side by side, never overlapping or
-hugging in a tangle. Prefer ONE main character per scene (close-ups); show both only when the story needs it. A beat describes only the motion inside that shot: what the characters do, their expressions, and
-small effects (sparkles, wind, splash, glow); simple clear actions (walk, turn, jump, wave, laugh, cry, hug), no
-transformations. Shot 1 must already be surprising or emotional (no slow intro). The last shot is the warm or funny payoff.
+HOW IT IS MADE: one opening image, then {nb} beats of {secs:g} seconds. Each beat is animated from the LAST frame of the
+previous beat, so it is ONE continuous scene: same place, same characters, roughly the same camera. The opening image
+shows the characters big in the frame, side by side (never overlapping or tangled), well lit. Each beat describes
+motion only: what the characters do, their facial expressions, and small effects (sparkles, wind, splash, glow);
+simple clear actions (walk, turn, jump, wave, laugh, cry, hug), no transformations, no new characters appearing.
+Beat 1 must already be surprising or emotional (no slow intro). The last beat is the warm or funny payoff.
 A Telugu storyteller narrates the reel: one "narration" sentence per beat, spoken while that beat plays, describing
 what happens so the viewer clearly follows a complete little story (beginning, problem, happy ending). Natural spoken
 Telugu like a grandmother telling a story, each sentence 6 to 10 words (about 4 seconds when spoken, so it fits its
@@ -2738,10 +2750,10 @@ Return ONLY JSON:
 "caption": "Telugu post message (max 18 words, 1 or 2 emotional sentences, simple spoken Telugu)",
 "moral": "one Telugu sentence", "question": "one short Telugu question that invites a real comment",
 "characters": ["English look of each character: species/object, colours, size, big expressive eyes (one sentence each)"],
-"scenes": [exactly {nb} English still-picture prompts, one per shot, in order (shot 1: medium shot with ALL characters large and fully visible)],
-"beats": [exactly {nb} English motion prompts, one per {secs:g}-second shot, in order],
+"opening_image": "English image prompt: close medium shot where ALL characters are large, side by side, fully visible and fill most of the frame, their pose and expression, a bright well-lit setting",
+"beats": [exactly {nb} English motion prompts, one per {secs:g}-second beat, in order],
 "tag": "one real English hashtag about the theme, e.g. #friendship", "hashtags": ["#kidsstories", "#moralstory"]}}
-LANGUAGE RULE: title, narration, caption, moral and question are Telugu; characters, scenes and beats are ENGLISH only."""
+LANGUAGE RULE: title, narration, caption, moral and question are Telugu; characters, opening_image and beats are ENGLISH only."""
     tries = 3 if (gemini_key() or anthropic_key()) else 5
     for attempt in range(tries):
         try:
@@ -2756,13 +2768,10 @@ LANGUAGE RULE: title, narration, caption, moral and question are Telugu; charact
             assert not any(LATIN_RE.search(x) for x in narration[:m] + [str(raw["moral"])]), "narration has English letters mixed in"
             raw["narration"] = narration[:m]
             beats = beats[:m]
-            scenes = [str(s).strip() for s in raw.get("scenes", []) if len(str(s).strip()) > 30]
-            if not scenes and len(str(raw.get("opening_image", ""))) > 30:
-                scenes = [str(raw["opening_image"]).strip()]
-            assert scenes, "scene pictures missing"
-            scenes = (scenes + [scenes[-1]] * m)[:m]   # every shot needs a start picture
-            assert not TELUGU_RE.search(" ".join(chars + beats + scenes)), "prompts must be English"
-            raw["scenes"], raw["opening_image"] = scenes, scenes[0]
+            opening = str(raw.get("opening_image") or (raw.get("scenes") or [""])[0]).strip()
+            assert len(opening) > 30, "opening image prompt too short"
+            assert not TELUGU_RE.search(" ".join(chars + beats) + opening), "prompts must be English"
+            raw["opening_image"] = opening
             if any(_sim(raw["title"], t) > 0.5 for t in used_titles) or any(_sim(raw["moral"], m_) > 0.5 for m_ in used_morals if m_):
                 raise ValueError("too similar to an earlier video")
             raw["characters"], raw["beats"] = chars, beats
@@ -2776,148 +2785,197 @@ LANGUAGE RULE: title, narration, caption, moral and question are Telugu; charact
     return None
 
 
+def assemble_short(idea, clips, d, out_path, seed):
+    """Narration (one line per animated beat + the moral) over the beats, music ducked under the voice. No text on
+    screen. Returns the number of narration lines used."""
+    k = len(clips)
+    lens = [media_seconds(c) for c in clips]
+    narr = idea["narration"]
+    lines = narr[:k] if k >= len(narr) else (narr[:k - 1] + [narr[-1]] if k > 1 else [narr[0]])  # missing scenes: jump to the ending
+    segs = [{"kind": "line", "spk": NARRATOR, "text": t} for t in lines]
+    segs.append({"kind": "moral", "spk": NARRATOR, "text": f"నీతి: {idea['moral']}"})
+    voice, starts, durs, _envs, total = make_voice(segs)
+    bounds = [0.0] + [max(0.5, starts[i] - 0.25) for i in range(1, k)] + [total]   # beat i spans its narration line
+    mi = f"minterpolate=fps={FPS}:mi_mode=mci:mc_mode=aobmc:vsbmc=1,"
+    cmd, fc = ["ffmpeg", "-y", "-loglevel", "error"], ""
+    for i, c in enumerate(clips):
+        cmd += ["-i", str(c)]
+        want = bounds[i + 1] - bounds[i]
+        f = want / max(0.1, lens[i])
+        if f <= 1.0:   # line is shorter than the beat: cut the beat
+            speed, pad = f"trim=duration={want:.3f},setpts=PTS-STARTPTS,", ""
+        else:          # line is longer: slow the beat a little (max 1.5x, more looks smeary), hold the last frame for any rest
+            s = min(f, 1.5)
+            speed = f"setpts={s:.3f}*PTS,{mi}"
+            extra = want - lens[i] * s
+            pad = f",tpad=stop_mode=clone:stop_duration={extra:.3f}" if extra > 0.05 else ""
+        fc += (f"[{i}:v]{speed}scale={W}:{H}:force_original_aspect_ratio=increase:flags=lanczos,crop={W}:{H},"
+               f"unsharp=5:5:0.45:5:5:0.0,fps={FPS},setsar=1,format=yuv420p{pad}[v{i}];")
+    fc += "".join(f"[v{i}]" for i in range(k)) + f"concat=n={k}:v=1:a=0[v]"
+    joined = d / "joined.mp4"
+    run(cmd + ["-filter_complex", fc, "-map", "[v]", "-c:v", "libx264", "-preset", "medium", "-crf", "17",
+               "-pix_fmt", "yuv420p", str(joined)])
+    rng = random.Random(seed)
+    n = len(voice)
+    music = get_music(n / SR, rng) * 1.6
+    sfx = make_sfx([(0.05, "pop")], n, rng)
+    wav = d / "audio.wav"
+    mix_audio(voice, music, sfx, wav)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(joined), "-i", str(wav), "-map", "0:v", "-map", "1:a",
+         "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-ac", "2", "-shortest", "-movflags", "+faststart", str(out_path)])
+    print(f"  reel '{idea['title']}': {k} animated scenes, {len(lines)} narration lines + moral, "
+          f"{media_seconds(out_path):.1f}s -> {out_path}")
+    return len(lines)
+
+
+def queue_reel(idea, video, n_scenes):
+    """Keep a finished reel for the next 'queued' slot (the workflow stores it on the 'queue' branch)."""
+    q = OUT / "queue"
+    q.mkdir(parents=True, exist_ok=True)
+    if video != q / "reel.mp4":
+        shutil.move(str(video), q / "reel.mp4")
+    (q / "meta.json").write_text(json.dumps({
+        "caption": build_caption(idea), "title": idea["title"], "moral": idea["moral"],
+        "story_id": "short-" + hashlib.md5(idea["title"].encode()).hexdigest()[:8],
+        "made": dt.datetime.now(dt.timezone.utc).isoformat(), "scenes": n_scenes}, ensure_ascii=False), encoding="utf-8")
+    if os.getenv("DRY_RUN") == "1":
+        print("  second reel kept in out/queue/ for the preview only (dry run: not saved for a later slot)")
+    else:
+        set_output("queue_save", "true")
+        print("  second reel saved: it will be posted at the next 'queued' slot")
+
+
 def generate_pixar_short(state, ig_titles):
-    """Returns True if out/reel.mp4 is ready to post. Never raises."""
+    """Animated story reels in the Nov 20 style (one continuous scene, each beat continues from the last frame).
+    With Kaggle: REELS_PER_RUN reels (default 2, one per T4 GPU) in ONE session; the first becomes out/reel.mp4 and is
+    posted now, the second goes to out/queue/ for the next slot. Returns True if out/reel.mp4 is ready. Never raises."""
     try:
         used_titles = [u.get("title", "") for u in state["used"]] + [t.replace("📖", "").strip() for t in ig_titles]
         used_morals = [u.get("moral", "") for u in state["used"]]
         trends = fetch_trends() if os.getenv("STORY_TRENDS", "1") == "1" else []
-        idea = short_concept([t for t in used_titles if t], [m_ for m_ in used_morals if m_], trends)
-        if not idea:
-            return False
-        print(f"Short idea: {idea['title']} | {' | '.join(idea['characters'])[:300]}")
-        print("Story: " + " / ".join(idea["narration"]) + f" / నీతి: {idea['moral']}")
+        use_kaggle = kaggle_ready() and os.getenv("VIDEO_BACKEND", "auto") in ("auto", "kaggle")
+        want = max(1, min(2, int(os.getenv("REELS_PER_RUN", "2")))) if use_kaggle else 1
         d = OUT / "short"
         d.mkdir(parents=True, exist_ok=True)
-        for old in d.glob("*"):
-            old.unlink()
-        seed = random.randint(1, 10 ** 6)
-        looks = " AND ".join(idea["characters"])
-        key = d / "key.png"
-        prov = free_image(short_still_prompt(idea["scenes"][0], looks), seed, key)
-        cover_fit(key)
-        print(f"  scene 1 picture via {prov}")
-        secs = float(os.getenv("SHORT_BEAT_SECONDS", "5"))
-        clips, src, animated, idxs = [], key, 0, []
-        motions = [f"{b} The characters look exactly the same: {looks}. Cute stylized Pixar-style 3D cartoon animation, "
-                   f"smooth natural motion, consistent faces." for b in idea["beats"]]
-        use_kaggle = kaggle_ready() and os.getenv("VIDEO_BACKEND", "auto") in ("auto", "kaggle")
-        if use_kaggle:   # Kaggle only: the Hugging Face Spaces are not used once Kaggle is set up
-            # every shot starts from its own fresh picture (same seed + same character text keeps the look), so mistakes
-            # never pile up from one scene into the next
-            keys = [key]
-            for i, scene in enumerate(idea["scenes"][1:len(motions)], 2):
-                p = d / f"scene{i}.png"
-                try:
-                    free_image(short_still_prompt(scene, looks), seed, p)
-                    cover_fit(p)
-                    keys.append(p)
-                    print(f"  scene {i} picture ready")
-                except Exception as e:
-                    print(f"  scene {i} picture failed ({str(e)[:150]}); reusing the previous picture")
-                    keys.append(keys[-1])
+        for old in d.rglob("*"):
+            if old.is_file():
+                old.unlink()
+        ideas = []
+        for r in range(want):
+            idea = short_concept([t for t in used_titles if t], [m_ for m_ in used_morals if m_],
+                                 trends if r == 0 else [])   # the second reel stays evergreen, so the two differ
+            if not idea:
+                continue
+            used_titles.append(idea["title"])
+            used_morals.append(idea["moral"])
+            idea["seed"] = random.randint(1, 10 ** 6)
+            idea["looks"] = " AND ".join(idea["characters"])
+            idea["motions"] = [f"{b} The characters look exactly the same: {idea['looks']}. Cute stylized Pixar-style 3D "
+                               f"cartoon animation, smooth natural motion, consistent faces." for b in idea["beats"]]
+            idea["still_prompt"] = short_still_prompt(idea["opening_image"], idea["looks"])
+            key = d / f"key{r}.png"
             try:
-                clips = kaggle_animate(keys, motions, seed, d,
-                                       [short_still_prompt(s, looks) for s in idea["scenes"][:len(motions)]])
-                idxs = [int(re.sub(r"\D", "", c.stem)) - 1 for c in clips]
-                animated = len(clips)
+                prov = free_image(idea["still_prompt"], idea["seed"], key)
+                cover_fit(key)
+                print(f"  reel {r + 1} opening picture via {prov} (the GPU redraws it in the cute style)")
+            except Exception as e:
+                if not use_kaggle or os.getenv("KAGGLE_IMAGE_MODEL", "").lower() == "none":
+                    print(f"  reel {r + 1} opening picture failed: {str(e)[:200]}")
+                    continue
+                Image.new("RGB", (W, H), (120, 170, 220)).save(key)   # placeholder: the GPU draws the real one
+                print(f"  reel {r + 1}: free picture service busy; the GPU will draw the opening picture")
+            idea["key"] = key
+            ideas.append(idea)
+            print(f"Short idea {r + 1}: {idea['title']} | {idea['looks'][:250]}")
+            print("  Story: " + " / ".join(idea["narration"]) + f" / నీతి: {idea['moral']}")
+        if not ideas:
+            return False
+        clips_for = {}
+        if use_kaggle:   # Kaggle only: the Hugging Face Spaces are not used once Kaggle is set up
+            try:
+                chains = [{"key": i["key"], "image_prompt": i["still_prompt"], "beats": i["motions"], "seed": i["seed"]}
+                          for i in ideas]
+                clips_for = kaggle_animate(chains, d)
             except Exception as e:
                 print(f"  Kaggle video failed: {str(e)[:500]}")
         else:
             print("  Kaggle is not set up (secrets KAGGLE_USERNAME + KAGGLE_API_TOKEN); using the free Hugging Face Spaces")
-        for i, motion in enumerate(motions if not use_kaggle else []):
-            clip = d / f"beat{i + 1}.mp4"
-            try:
-                space = animate_still(src, motion, clip, secs, seed + i)
-                animated += 1
-                print(f"  beat {i + 1}/{len(idea['beats'])} animated via {space}")
-            except QuotaError as e:
-                print(f"  free GPU quota used up after {animated} beat(s): {e}")
-                break
-            except Exception as e:
-                print(f"  beat {i + 1} animation failed: {str(e)[:300]}")
-                break   # the next beat must start from this one's last frame, so stop the chain here
-            clips.append(clip)
-            nxt = d / f"last{i + 1}.png"
-            last_frame(clip, nxt)
-            src = nxt
-        if not clips:
-            if os.getenv("SHORT_REQUIRE_MOTION", "0") == "1":
-                print("No scene could be animated (see the video lines above). Skipping this run; the next run will try again.")
-                return False
-            # still post the full narrated story: one Pixar picture per scene with a camera move
-            print("No scene could be animated (free GPU quota used up): making the story with moving Pixar pictures instead.")
-            prev = key
-            for i, beat in enumerate(idea["beats"]):
-                still = prev
-                if i > 0:
-                    try:
-                        new = d / f"still{i + 1}.png"
-                        if (d / f"scene{i + 1}.png").exists():
-                            shutil.copy(d / f"scene{i + 1}.png", new)
-                        else:   # same seed keeps the look closer between scenes
-                            free_image(short_still_prompt(idea["scenes"][min(i, len(idea["scenes"]) - 1)], looks), seed, new)
-                        cover_fit(new)
-                        still = prev = new
-                    except Exception as e:
-                        print(f"  scene {i + 1} picture failed ({str(e)[:150]}); reusing the previous one")
+            idea, src, clips = ideas[0], ideas[0]["key"], []
+            secs = float(os.getenv("SHORT_BEAT_SECONDS", "5"))
+            for i, motion in enumerate(idea["motions"]):
                 clip = d / f"beat{i + 1}.mp4"
-                still_to_clip(still, clip, 10, CAMERA_MOVES[i % len(CAMERA_MOVES)])
+                try:
+                    space = animate_still(src, motion, clip, secs, idea["seed"] + i)
+                    print(f"  beat {i + 1}/{len(idea['motions'])} animated via {space}")
+                except QuotaError as e:
+                    print(f"  free GPU quota used up after {len(clips)} beat(s): {e}")
+                    break
+                except Exception as e:
+                    print(f"  beat {i + 1} animation failed: {str(e)[:300]}")
+                    break   # the next beat must start from this one's last frame, so stop the chain here
                 clips.append(clip)
-                print(f"  scene {i + 1}/{len(idea['beats'])} made with a camera move")
-        k = len(clips)
-        lens = [media_seconds(c) for c in clips]
-        # the story: narration line i is spoken during beat i and the moral closes the reel (no text on screen)
-        narr = idea["narration"]
-        if len(idxs) != k:
-            idxs = list(range(k))
-        lines = [narr[min(j, len(narr) - 1)] for j in idxs]
-        if k > 1 and idxs[-1] < len(narr) - 1:
-            lines[-1] = narr[-1]   # a scene is missing at the end: still finish with the story's ending line
-        if os.getenv("SHORT_VOICEOVER", "1") == "1":
-            segs = [{"kind": "line", "spk": NARRATOR, "text": t} for t in lines]
-            segs.append({"kind": "moral", "spk": NARRATOR, "text": f"నీతి: {idea['moral']}"})
-            voice, starts, durs, _envs, total = make_voice(segs)
-            bounds = [0.0] + [max(0.5, starts[i] - 0.25) for i in range(1, k)] + [total]   # beat i spans its narration line
-        else:
-            total = sum(lens)
-            voice = np.zeros(int(total * SR), np.float32)
-            bounds = [0.0] + [sum(lens[:i + 1]) for i in range(k)]
-        mi = f"minterpolate=fps={FPS}:mi_mode=mci:mc_mode=aobmc:vsbmc=1,"
-        cmd, fc = ["ffmpeg", "-y", "-loglevel", "error"], ""
-        for i, c in enumerate(clips):
-            cmd += ["-i", str(c)]
-            want = bounds[i + 1] - bounds[i]
-            f = want / max(0.1, lens[i])
-            if f <= 1.0:   # line is shorter than the beat: cut the beat
-                speed, pad = f"trim=duration={want:.3f},setpts=PTS-STARTPTS,", ""
-            else:          # line is longer: slow the beat a little (max 1.5x, more looks smeary), hold the last frame for any rest
-                s = min(f, 1.5)
-                speed = f"setpts={s:.3f}*PTS,{mi}"
-                extra = want - lens[i] * s
-                pad = f",tpad=stop_mode=clone:stop_duration={extra:.3f}" if extra > 0.05 else ""
-            fc += (f"[{i}:v]{speed}scale={W}:{H}:force_original_aspect_ratio=increase:flags=lanczos,crop={W}:{H},"
-                   f"unsharp=5:5:0.45:5:5:0.0,fps={FPS},setsar=1,format=yuv420p{pad}[v{i}];")
-        fc += "".join(f"[v{i}]" for i in range(k)) + f"concat=n={k}:v=1:a=0[v]"
-        joined = d / "joined.mp4"
-        run(cmd + ["-filter_complex", fc, "-map", "[v]", "-c:v", "libx264", "-preset", "medium", "-crf", "17",
-                   "-pix_fmt", "yuv420p", str(joined)])
-        # narration + music (ducked under the voice) + a little sparkle
-        rng = random.Random(seed)
-        n = len(voice)
-        music = get_music(n / SR, rng) * 1.6
-        sfx = make_sfx([(0.05, "pop")], n, rng)
-        wav = d / "audio.wav"
-        mix_audio(voice, music, sfx, wav)
-        run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(joined), "-i", str(wav), "-map", "0:v", "-map", "1:a",
-             "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-ac", "2", "-shortest", "-movflags", "+faststart",
-             str(OUT / "reel.mp4")])
-        print(f"Animated beats: {animated} of {len(idea['beats'])}, narration lines: {len(lines)} + moral, "
-              f"reel {media_seconds(OUT / 'reel.mp4'):.1f}s")
+                nxt = d / f"last{i + 1}.png"
+                last_frame(clip, nxt)
+                src = nxt
+            if clips:
+                clips_for = {0: clips}
+        # a reel needs at least SHORT_MIN_SCENES animated scenes; the most complete one is posted now
+        min_scenes = int(os.getenv("SHORT_MIN_SCENES", "2"))
+        done = sorted(((k, v) for k, v in clips_for.items() if len(v) >= min_scenes), key=lambda kv: -len(kv[1]))
+        if not done:
+            print("No reel got enough animated scenes (see the video lines above).")
+            return False
+        posted = None
+        for n_, (k, clips) in enumerate(done):
+            idea = ideas[k]
+            sub = d / f"reel{k}"
+            sub.mkdir(exist_ok=True)
+            out_path = OUT / "reel.mp4" if n_ == 0 else OUT / "queue" / "reel.mp4"
+            assemble_short(idea, clips, sub, out_path, idea["seed"])
+            if n_ == 0:
+                posted = (idea, len(clips))
+            else:
+                queue_reel(idea, out_path, len(clips))
     except Exception as e:
         print(f"Animated short failed: {str(e)[:500]}")
         return False
-    return post_idea(idea, "short-", f"free animated short ({animated}/{len(idea['beats'])} beats animated)")
+    idea, n_scenes = posted
+    return post_idea(idea, "short-", f"free animated short ({n_scenes}/{len(idea['beats'])} scenes, continuous)")
+
+
+def post_queued(state, ig_titles):
+    """Posts the reel the previous Kaggle run kept (fetched into queued/ by the workflow). Returns True if ready."""
+    q = pathlib.Path("queued")
+    meta_p, video = q / "meta.json", q / "reel.mp4"
+    if not (meta_p.exists() and video.exists() and video.stat().st_size > 100000):
+        print("No queued reel waiting (the last Kaggle run made only one, or it was already posted).")
+        return False
+    meta = json.loads(meta_p.read_text(encoding="utf-8"))
+    age_h = (dt.datetime.now(dt.timezone.utc) - dt.datetime.fromisoformat(meta["made"])).total_seconds() / 3600
+    if age_h > float(os.getenv("QUEUE_MAX_HOURS", "20")):
+        print(f"Queued reel is {age_h:.0f} h old; dropping it.")
+        if os.getenv("DRY_RUN") != "1":
+            set_output("queue_used", "true")
+        return False
+    if any(meta["title"] in t for t in ig_titles):
+        print("Queued reel's story is already on Instagram; dropping it.")
+        if os.getenv("DRY_RUN") != "1":
+            set_output("queue_used", "true")
+        return False
+    OUT.mkdir(exist_ok=True)
+    shutil.copy(video, OUT / "reel.mp4")
+    name = f"reel-{dt.datetime.now(IST).strftime('%Y%m%d-%H%M')}.mp4"
+    meta["video_name"] = name
+    (OUT / "meta.json").write_text(json.dumps(meta, ensure_ascii=False), encoding="utf-8")
+    print(f"Built out/reel.mp4 with the queued animated reel '{meta['title']}' (made {age_h:.1f} h ago, "
+          f"{meta.get('scenes', '?')} scenes)")
+    telegram_send(OUT / "reel.mp4", meta["title"], meta["caption"])
+    set_output("has_post", "true")
+    set_output("video_name", name)
+    if os.getenv("DRY_RUN") != "1":
+        set_output("queue_used", "true")
+    return True
 
 
 # ------------------------------------------- trending "మీకు తెలుసా?" fact reels (no GPU: AI pictures + camera moves)
@@ -3068,15 +3126,132 @@ def generate_trend_reel(state, ig_titles):
     return post_idea(idea, "facts-", "trending fact reel")
 
 
-def reel_format():
-    """'animated' or 'trending' for this run: REEL_FORMAT, or by the 3-hour slot (ANIMATED_HOURS_UTC)."""
+# ------------------------------------------------ image posts: swipeable "మీకు తెలుసా?" fact cards (carousel)
+PW, PH = 1080, 1350   # Instagram portrait post (4:5)
+
+
+def _wrap(text, font, width):
+    lines, cur = [], ""
+    for w in text.split():
+        t = f"{cur} {w}".strip()
+        if cur and font.getlength(t) > width:
+            lines.append(cur)
+            cur = w
+        else:
+            cur = t
+    return lines + ([cur] if cur else [])
+
+
+def render_card(img_path, text, out, badge=None, cover=False):
+    """A sharp picture with big Telugu text on a dark gradient at the bottom (plus a small '2/6' badge)."""
+    im = Image.open(img_path).convert("RGB")
+    s = max(PW / im.width, PH / im.height)
+    im = im.resize((math.ceil(im.width * s), math.ceil(im.height * s)), Image.LANCZOS)
+    l, t = (im.width - PW) // 2, max(0, (im.height - PH) // 3)
+    im = im.crop((l, t, l + PW, t + PH)).convert("RGBA")
+    font = te_font(78 if cover else 58)
+    lines = _wrap(text, font, PW - 120)
+    lh = int(font.size * 1.45)
+    extra = 80 if cover else 0
+    block = lh * len(lines) + extra
+    top = PH - 90 - block
+    grad = Image.new("L", (1, PH))
+    g0 = max(0, top - 260)
+    for y in range(PH):
+        grad.putpixel((0, y), 0 if y < g0 else min(235, int(235 * (y - g0) / max(1, PH - g0) * 1.6)))
+    shade = Image.new("RGBA", (PW, PH), (0, 0, 0, 255))
+    shade.putalpha(grad.resize((PW, PH)))
+    im = Image.alpha_composite(im, shade)
+    dr = ImageDraw.Draw(im)
+    y = top
+    for ln in lines:
+        w = font.getlength(ln)
+        dr.text(((PW - w) / 2, y), ln, font=font, fill=(255, 255, 255), stroke_width=3, stroke_fill=(0, 0, 0))
+        y += lh
+    if cover:   # swipe hint
+        sf = te_font(44)
+        hint = "స్వైప్ చేయండి"
+        hw = sf.getlength(hint) + 70
+        dr.text(((PW - hw) / 2, y + 16), hint, font=sf, fill=(255, 214, 10), stroke_width=2, stroke_fill=(0, 0, 0))
+        dr.text(((PW - hw) / 2 + sf.getlength(hint) + 18, y + 18), ">>", font=latin_font(42), fill=(255, 214, 10),
+                stroke_width=2, stroke_fill=(0, 0, 0))
+    if badge:
+        bf = latin_font(40)
+        bw = bf.getlength(badge) + 44
+        dr.rounded_rectangle((40, 44, 40 + bw, 108), radius=32, fill=(255, 214, 10))
+        dr.text((62, 52), badge, font=bf, fill=(20, 20, 20))
+    im.convert("RGB").save(out, "JPEG", quality=93)
+
+
+def generate_fact_post(state, ig_titles):
+    """Instagram carousel post: a cover (the trending hook) + one card per fact. Returns True if out/post/ is ready."""
+    try:
+        if not features.check("raqm"):   # without it Telugu letters render broken (vowel signs and conjuncts split)
+            print("Fact post skipped: Telugu text shaping (raqm) is not available on this machine.")
+            return False
+        trends = fetch_trends()
+        print(f"Trending now ({len(trends)}): " + " | ".join(t for t, _, _ in trends[:12]))
+        used = [u.get("title", "") for u in state["used"]] + [t.replace("📖", "").replace("🤯", "").strip() for t in ig_titles]
+        idea = trend_concept(trends, [t for t in used if t])
+        if not idea:
+            return False
+        print(f"Fact post: {idea['title']} (trend: {idea.get('trend', '?')})")
+        d = OUT / "post"
+        d.mkdir(parents=True, exist_ok=True)
+        for old in d.glob("*"):
+            old.unlink()
+        cards = [(idea["hook"], idea.get("hook_image") or idea["facts"][0]["image"])] + \
+                [(f["line"], f["image"]) for f in idea["facts"]]
+        seed = random.randint(1, 10 ** 6)
+        stamp = dt.datetime.now(IST).strftime("%Y%m%d-%H%M")
+        names, prev = [], None
+        for i, (text, prompt) in enumerate(cards):
+            raw = d / f"raw{i}.png"
+            try:
+                free_image(f"{prompt}. {FACT_STYLE}.", seed + i, raw)
+                prev = raw
+            except Exception as e:
+                print(f"  picture {i + 1} failed ({str(e)[:120]})" + ("; reusing the previous one" if prev else ""))
+                if not prev:
+                    return False
+            name = f"post-{stamp}-{i + 1}.jpg"
+            render_card(prev, text, d / name, badge=None if i == 0 else f"{i}/{len(cards) - 1}", cover=(i == 0))
+            names.append(name)
+            print(f"  card {i + 1}/{len(cards)} ready")
+        for r in d.glob("raw*.png"):
+            r.unlink()
+        idea["kind"] = "facts"
+        caption = build_caption(idea, post=True)
+        (OUT / "meta.json").write_text(json.dumps({
+            "type": "carousel", "images": names, "caption": caption, "video_name": names[0],
+            "story_id": "post-" + hashlib.md5(idea["title"].encode()).hexdigest()[:8],
+            "title": idea["title"], "moral": ""}, ensure_ascii=False), encoding="utf-8")
+        print(f"Built out/post/ with a {len(names)}-card fact post")
+        set_output("has_post", "true")
+        set_output("post_type", "carousel")
+        set_output("video_name", names[0])
+        return True
+    except Exception as e:
+        print(f"Fact post failed: {str(e)[:500]}")
+        return False
+
+
+SLOT_PLAN_DEFAULT = "0:post,3:post,6:animated,9:queued,12:animated,15:queued,18:trending,21:post"
+
+
+def slot_task():
+    """What this run makes: REEL_FORMAT, or the 3-hour slot's task from SLOT_PLAN (UTC hour: task)."""
     fmt = os.getenv("REEL_FORMAT", "auto").strip().lower()
-    if fmt in ("animated", "trending"):
+    if fmt in ("animated", "queued", "trending", "post"):
         return fmt
     now = dt.datetime.now(dt.timezone.utc)
     slot = round((now.hour + now.minute / 60) / 3) * 3 % 24   # a late-starting run still counts as its slot
-    hours = {int(h) for h in os.getenv("ANIMATED_HOURS_UTC", "6,12,15").split(",") if h.strip().isdigit()}
-    return "animated" if slot in hours else "trending"
+    plan = {}
+    for item in (os.getenv("SLOT_PLAN") or SLOT_PLAN_DEFAULT).split(","):
+        h, _, task = item.partition(":")
+        if h.strip().isdigit():
+            plan[int(h)] = task.strip().lower()
+    return plan.get(slot, "trending")
 
 
 # -------------------------------- manual mode: you make the clip with your own Gemini plan, the bot does the rest
@@ -3349,17 +3524,14 @@ def generate():
         return
     if os.getenv("PIXAR_STORIES") == "1" and os.getenv("PIXAR_FORMAT", "short") == "short":
         # every 3 hours: animated story at the peak slots (Kaggle GPU), trending "మీకు తెలుసా?" reel in the others
-        fmt = reel_format()
-        print(f"REEL FORMAT this run: {fmt}")
-        if fmt == "trending":
-            if not generate_trend_reel(state, ig):
-                print("Trending reel not made this run; nothing posted.")
-                set_output("has_post", "false")
+        task = slot_task()
+        print(f"THIS RUN: {task}")
+        made = {"post": generate_fact_post, "queued": post_queued, "trending": generate_trend_reel,
+                "animated": generate_pixar_short}.get(task, generate_trend_reel)(state, ig)
+        if made:
             return
-        if generate_pixar_short(state, ig):
-            return
-        if os.getenv("FALLBACK_TRENDING", "1") == "1":
-            print("Animated short not made: posting a trending fact reel in this slot instead.")
+        if task in ("animated", "queued", "post") and os.getenv("FALLBACK_TRENDING", "1") == "1":
+            print(f"Nothing from '{task}' this slot: posting a trending fact reel instead.")
             if generate_trend_reel(state, ig):
                 return
         print("Nothing made this run; the next scheduled run will try again.")
@@ -3495,6 +3667,19 @@ def wait_until_public(url, tries=12):
     raise RuntimeError(f"Video not reachable publicly: {url}")
 
 
+def wait_container(container, token, tries=60):
+    for _ in range(tries):
+        st = requests.get(f"{GRAPH}/{container}", params=sign({"fields": "status_code,status", "access_token": token}),
+                          timeout=30).json()
+        code = st.get("status_code")
+        if code in (None, "FINISHED"):   # image containers may not report a status at all
+            return
+        if code in ("ERROR", "EXPIRED"):
+            raise RuntimeError(f"Instagram could not process the media: {st}")
+        time.sleep(5)
+    raise RuntimeError("Timed out waiting for Instagram to process the media.")
+
+
 def publish():
     meta_path = OUT / "meta.json"
     if not meta_path.exists():
@@ -3512,7 +3697,23 @@ def publish():
         save_state(meta)
         return
     repo = os.environ["GITHUB_REPOSITORY"]
-    url = f"https://raw.githubusercontent.com/{repo}/{os.getenv('MEDIA_BRANCH', 'media')}/{meta['video_name']}"
+    base = f"https://raw.githubusercontent.com/{repo}/{os.getenv('MEDIA_BRANCH', 'media')}"
+    if meta.get("type") == "carousel":   # image post: one container per card, then the carousel
+        children = []
+        for name in meta["images"]:
+            wait_until_public(f"{base}/{name}")
+            cid = api("POST", f"{user_id}/media", image_url=f"{base}/{name}", is_carousel_item="true",
+                      access_token=token)["id"]
+            wait_container(cid, token)
+            children.append(cid)
+        container = api("POST", f"{user_id}/media", media_type="CAROUSEL", children=",".join(children),
+                        caption=meta["caption"], access_token=token)["id"]
+        wait_container(container, token)
+        res = api("POST", f"{user_id}/media_publish", creation_id=container, access_token=token)
+        print(f"Published image post ({len(children)} cards)! Media ID: {res['id']}")
+        save_state(meta)
+        return
+    url = f"{base}/{meta['video_name']}"
     wait_until_public(url)
     try:
         container = api("POST", f"{user_id}/media", media_type="REELS", video_url=url, caption=meta["caption"],
@@ -3546,8 +3747,8 @@ if __name__ == "__main__":
     if cmd == "prompts":
         write_prompts()
         sys.exit(0)
-    if cmd == "trend":   # one trending fact reel in out/reel.mp4 (not posted)
-        os.environ.update(PIXAR_STORIES="1", PIXAR_FORMAT="short", REEL_FORMAT="trending")
+    if cmd in ("trend", "post"):   # one trending fact reel / fact image post in out/ (not posted)
+        os.environ.update(PIXAR_STORIES="1", PIXAR_FORMAT="short", REEL_FORMAT="trending" if cmd == "trend" else "post")
         generate()
         sys.exit(0)
     if cmd in ("pixar-reel", "short"):   # AI writes a new idea and it becomes a reel in out/reel.mp4 (not posted)

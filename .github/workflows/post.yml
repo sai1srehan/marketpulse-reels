@@ -5,21 +5,22 @@ on:
     paths:
       - "inbox/**"
   schedule:
-    # a reel every 3 hours (05:30, 08:30, 11:30, 14:30, 17:30, 20:30, 23:30, 02:30 IST).
-    # The 11:30 / 17:30 / 20:30 IST runs (ANIMATED_HOURS_UTC = 6,12,15) make animated stories on the Kaggle GPU and post
-    # ~75 min later (about 12:45 PM, 6:45 PM, 9:45 PM IST, peak hours); the other runs post a trending fact reel in ~10 min.
-    # 3 animated a day stays inside Kaggle's free 30 GPU hours a week.
+    # something every 3 hours (SLOT_PLAN, India time):
+    #   05:30 image post | 08:30 image post | 11:30 Kaggle makes 2 animated reels -> reel 1 posts ~1:30 PM
+    #   14:30 reel 2 (saved) | 17:30 Kaggle makes 2 more -> reel 3 posts ~7:30 PM | 20:30 reel 4 (saved)
+    #   23:30 trending fact reel | 02:30 image post
+    # = 5 reels (4 animated) + 3 image posts a day; 2 Kaggle sessions a day stay inside the free 30 GPU hours a week.
     - cron: "0 */3 * * *"
   workflow_dispatch:
     inputs:
       dry_run:
-        description: "Build the video only, do NOT post to Instagram"
+        description: "Build only, do NOT post to Instagram"
         type: boolean
         default: true
       format:
-        description: "auto = by time slot; animated = Kaggle story; trending = 'మీకు తెలుసా?' trending fact reel"
+        description: "auto = by time slot; animated = 2 Kaggle story reels; queued = post the saved reel; trending = fact reel; post = image post"
         type: choice
-        options: [auto, animated, trending]
+        options: [auto, animated, queued, trending, post]
         default: auto
 
 permissions:
@@ -45,8 +46,20 @@ jobs:
       - name: Install ffmpeg, fonts, Python packages
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq ffmpeg fonts-dejavu-core
+          sudo apt-get install -y -qq ffmpeg fonts-dejavu-core libfribidi0 libraqm0 || sudo apt-get install -y -qq ffmpeg fonts-dejavu-core libfribidi0
           pip install -r requirements.txt
+
+      # the second animated reel of the last Kaggle run waits on the "queue" branch (never committed to main)
+      - name: Fetch the saved reel
+        run: |
+          if git fetch -q origin queue 2>/dev/null; then
+            mkdir -p queued
+            git show origin/queue:queued/meta.json > queued/meta.json || true
+            git show origin/queue:queued/reel.mp4 > queued/reel.mp4 || true
+            ls -la queued
+          else
+            echo "no saved reel"
+          fi
 
       - name: Build the video
         id: gen
@@ -71,7 +84,8 @@ jobs:
           # 1 = post only real animation (skip the run when the free GPU quota is used up); 0 = post moving pictures instead
           SHORT_REQUIRE_MOTION: ${{ vars.SHORT_REQUIRE_MOTION || '1' }}
           REEL_FORMAT: ${{ inputs.format || 'auto' }}
-          ANIMATED_HOURS_UTC: ${{ vars.ANIMATED_HOURS_UTC || '6,12,15' }}
+          SLOT_PLAN: ${{ vars.SLOT_PLAN }}
+          REELS_PER_RUN: ${{ vars.REELS_PER_RUN || '2' }}
           FALLBACK_TRENDING: ${{ vars.FALLBACK_TRENDING || '1' }}
           SHORT_BEATS: ${{ vars.SHORT_BEATS || '4' }}
           SHORT_STEPS: ${{ vars.SHORT_STEPS || '4' }}
@@ -95,20 +109,43 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
 
       - name: Save video for preview
-        if: steps.gen.outputs.has_post == 'true'
+        if: steps.gen.outputs.has_post == 'true' || steps.gen.outputs.queue_save == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: reel-preview
-          path: out/reel.mp4
+          path: |
+            out/reel.mp4
+            out/queue/reel.mp4
+            out/post/*.jpg
+          if-no-files-found: ignore
           retention-days: 3
 
-      # Instagram must download the video from a public URL. It is pushed to a
+      # keep the second animated reel for the next "queued" slot
+      - name: Save the second reel for later
+        if: steps.gen.outputs.queue_save == 'true'
+        run: |
+          mkdir -p /tmp/queue/queued
+          cp out/queue/reel.mp4 out/queue/meta.json /tmp/queue/queued/
+          cd /tmp/queue
+          git init -q -b queue
+          git config user.name "reel-bot"
+          git config user.email "reel-bot@users.noreply.github.com"
+          git add .
+          git commit -q -m "saved reel"
+          git remote add origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
+          git push -q --force origin queue
+
+      # Instagram must download the video/images from a public URL. They are pushed to a
       # throw-away "media" branch (history reset every run) so the repo stays small.
       - name: Host video on the media branch
         if: steps.gen.outputs.has_post == 'true'
         run: |
           mkdir /tmp/media
-          cp out/reel.mp4 "/tmp/media/${{ steps.gen.outputs.video_name }}"
+          if [ "${{ steps.gen.outputs.post_type }}" = "carousel" ]; then
+            cp out/post/*.jpg /tmp/media/
+          else
+            cp out/reel.mp4 "/tmp/media/${{ steps.gen.outputs.video_name }}"
+          fi
           cd /tmp/media
           git init -q -b media
           git config user.name "reel-bot"
@@ -128,6 +165,11 @@ jobs:
           FB_APP_SECRET: ${{ secrets.FB_APP_SECRET }}
           IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
           DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && '1' || '0' }}
+
+      # the saved reel was posted (or was too old): remove it so it is never posted twice
+      - name: Remove the used saved reel
+        if: steps.gen.outputs.queue_used == 'true' && success()
+        run: git push -q origin --delete queue || true
 
       - name: Save bot memory (ideas, posted stories, inbox)
         run: |
