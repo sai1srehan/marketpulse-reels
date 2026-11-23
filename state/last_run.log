@@ -1,35 +1,36 @@
-run at 2026-11-23T07:22:58.776594+00:00 event=workflow_dispatch
+run at 2026-11-23T08:59:47.854567+00:00 event=workflow_dispatch
 MODE: PIXAR_STORIES=1 MANUAL_VIDEOS=0 OMNI_VIDEOS=0 | story AI: Gemini | images: free Pollinations
-REEL FORMAT this run: trending
-Trending now (23): sa vs ban | విజయ్ | hong kong vs afghanistan a | కార్తీక దీపం | అయోధ్య | thanksgiving 2026 | నవంబర్ 23 | thanksgiving day 2026 | tata steel apl apollo | bisleri | sabarimala | sabarimala virtual q
+THIS RUN: post
+Trending now (24): satya nadella | sensex nifty stock market | south africa vs bangladesh | డింపుల్ హయాతి | విజయ్ | hong kong vs afghanistan a | అయోధ్య | thanksgiving 2026 | నవంబర్ 23 | thanksgiving day 2026 | sabarimala | sabarimala virtual q
 Gemini gemini-3.8-flash error: HTTPSConnectionPool(host='generativelanguage.googleapis.com', port=443): Read timed out. (read timeout=100)
-Gemini gemini-3.7-flash failed: 429 {
+Gemini gemini-3.7-flash busy (503), retrying
+Gemini gemini-3.7-flash busy (503), retrying
+Gemini gemini-3.7-flash busy (503), retrying
+Gemini gemini-3.7-flash failed: 503 {
   "error": {
-    "code": 429,
-    "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://aistudio.google.com/do
+    "code": 503,
+    "message": "This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.",
+    "status": "UNAVAILABLE"
+  }
+}
+
 Story written by Gemini (gemini-3.6-flash)
-Trend reel: నీటి గురించిన వింతలు (trend: bisleri)
+Fact post: అంతరిక్ష కేంద్రం వింతలు (trend: spacex dragon)
   image attempt 1 failed: 503 {"status":503,"success":false,"error":{"code":"SERVICE_UNAVAILABLE","message":"The Classic API is at its limit right now. Retry after 10s, or get full
-  waiting 45s for the free image tier
-  image attempt 2 failed: 503 {"status":503,"success":false,"error":{"code":"SERVICE_UNAVAILABLE","message":"The Classic API is at its limit right now. Retry after 10s, or get full
-  waiting 45s for the free image tier
-  picture 1/6 ready
-  waiting 40s for the free image tier
-  image attempt 1 failed: 503 {"status":503,"success":false,"error":{"code":"SERVICE_UNAVAILABLE","message":"The Classic API is at its limit right now. Retry after 10s, or get full
-  waiting 45s for the free image tier
-  picture 2/6 ready
-  waiting 42s for the free image tier
-  image attempt 1 failed: 503 {"status":503,"success":false,"error":{"code":"SERVICE_UNAVAILABLE","message":"The Classic API is at its limit right now. Retry after 10s, or get full
-  waiting 45s for the free image tier
-  image attempt 2 failed: 503 {"status":503,"success":false,"error":{"code":"SERVICE_UNAVAILABLE","message":"The Classic API is at its limit right now. Retry after 10s, or get full
-  waiting 45s for the free image tier
-  picture 3/6 ready
   waiting 43s for the free image tier
-  picture 4/6 ready
+  card 1/6 ready
+  waiting 43s for the free image tier
+  card 2/6 ready
   waiting 42s for the free image tier
-  picture 5/6 ready
-  waiting 42s for the free image tier
-  picture 6/6 ready
-Music: synthesized playful instrumental
-Trend reel 37.7s, 6 pictures
-Built out/reel.mp4 with trending fact reel (10.9 MB)
+  card 3/6 ready
+  waiting 41s for the free image tier
+  image attempt 1 failed: 503 {"status":503,"success":false,"error":{"code":"SERVICE_UNAVAILABLE","message":"The Classic API is at its limit right now. Retry after 10s, or get full
+  waiting 45s for the free image tier
+  card 4/6 ready
+  waiting 43s for the free image tier
+  card 5/6 ready
+  waiting 41s for the free image tier
+  image attempt 1 failed: 503 {"status":503,"success":false,"error":{"code":"SERVICE_UNAVAILABLE","message":"The Classic API is at its limit right now. Retry after 10s, or get full
+  waiting 44s for the free image tier
+  card 6/6 ready
+Built out/post/ with a 6-card fact post
