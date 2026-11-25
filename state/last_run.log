@@ -1,23 +1,28 @@
-run at 2026-11-25T00:52:05.053230+00:00 event=schedule
+run at 2026-11-25T03:53:33.818663+00:00 event=schedule
 MODE: PIXAR_STORIES=1 MANUAL_VIDEOS=0 OMNI_VIDEOS=0 | story AI: Gemini | images: free Pollinations
 THIS RUN: post
 Telugu calendar: Karthika masam, Wednesday, special: -, festivals: [('Karthika Pournami', -1)]
-Devotional angle: Karthika masam (కార్తీక మాసం): simple daily pooja and good habits for the whole family
+Devotional angle: Karthika masam (కార్తీక మాసం): why this month is special and what people do every day of it
 Gemini gemini-3.8-flash busy (503), retrying
-Gemini gemini-3.8-flash error: HTTPSConnectionPool(host='generativelanguage.googleapis.com', port=443): Read timed out. (read timeout=100)
-Gemini gemini-3.7-flash busy (503), retrying
-Gemini gemini-3.7-flash error: HTTPSConnectionPool(host='generativelanguage.googleapis.com', port=443): Read timed out. (read timeout=100)
+Gemini gemini-3.8-flash failed: 429 {
+  "error": {
+    "code": 429,
+    "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://aistudio.google.com/do
+Gemini gemini-3.7-flash failed: 429 {
+  "error": {
+    "code": 429,
+    "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://aistudio.google.com/do
 Story written by Gemini (gemini-3.6-flash)
-Devotional post: కార్తీక మాసంలో కుటుంబ పూజా అలవాట్లు
+Devotional post: కార్తీక మాసం నిత్య పూజా విశేషాలు
   card 1/6 ready
   waiting 42s for the free image tier
   card 2/6 ready
-  waiting 43s for the free image tier
+  waiting 42s for the free image tier
   card 3/6 ready
-  waiting 43s for the free image tier
+  waiting 41s for the free image tier
   card 4/6 ready
-  waiting 43s for the free image tier
+  waiting 42s for the free image tier
   card 5/6 ready
-  waiting 43s for the free image tier
+  waiting 40s for the free image tier
   card 6/6 ready
 Built out/post/ with a 6-card devotional post
