@@ -1,39 +1,125 @@
-run at 2026-11-26T03:49:56.019999+00:00 event=schedule
+run at 2026-11-26T07:00:41.227200+00:00 event=schedule
 MODE: PIXAR_STORIES=1 MANUAL_VIDEOS=0 OMNI_VIDEOS=0 | story AI: Gemini | images: free Pollinations
-THIS RUN: post
-Telugu calendar: Karthika masam, Thursday, special: -, festivals: -
-Devotional angle: Karthika masam (కార్తీక మాసం): deepam / lamp lighting customs and their meaning
-Gemini gemini-3.8-flash error: HTTPSConnectionPool(host='generativelanguage.googleapis.com', port=443): Read timed out. (read timeout=100)
-Gemini gemini-3.7-flash busy (503), retrying
-Gemini gemini-3.7-flash error: HTTPSConnectionPool(host='generativelanguage.googleapis.com', port=443): Read timed out. (read timeout=100)
-Gemini gemini-3.6-flash error: HTTPSConnectionPool(host='generativelanguage.googleapis.com', port=443): Read timed out. (read timeout=100)
-Story written by Gemini (gemini-3.5-flash-lite)
-Devotional post attempt 1 failed: too similar to an earlier post
-Story written by Gemini (gemini-3.5-flash-lite)
-Devotional post attempt 2 failed: too similar to an earlier post
-Story written by Gemini (gemini-3.5-flash-lite)
-Devotional post: కార్తీక దీపారాధన అంతరార్థం
-  image attempt 1 failed: 503 {"status":503,"success":false,"error":{"code":"SERVICE_UNAVAILABLE","message":"The Classic API is at its limit right now. Retry after 10s, or get full
-  waiting 45s for the free image tier
-  card 1/6 ready
-  waiting 43s for the free image tier
-  image attempt 1 failed: 503 {"status":503,"success":false,"error":{"code":"SERVICE_UNAVAILABLE","message":"The Classic API is at its limit right now. Retry after 10s, or get full
-  waiting 45s for the free image tier
-  card 2/6 ready
-  waiting 43s for the free image tier
-  card 3/6 ready
-  waiting 42s for the free image tier
-  card 4/6 ready
-  waiting 40s for the free image tier
-  image attempt 1 failed: 503 {"status":503,"success":false,"error":{"code":"SERVICE_UNAVAILABLE","message":"The Classic API is at its limit right now. Retry after 10s, or get full
-  waiting 45s for the free image tier
-  image attempt 2 failed: 503 {"status":503,"success":false,"error":{"code":"SERVICE_UNAVAILABLE","message":"The Classic API is at its limit right now. Retry after 10s, or get full
-  waiting 45s for the free image tier
-  image attempt 3 failed: 503 {"status":503,"success":false,"error":{"code":"SERVICE_UNAVAILABLE","message":"The Classic API is at its limit right now. Retry after 10s, or get full
-  waiting 45s for the free image tier
-  card 5/6 ready
-  waiting 43s for the free image tier
-  image attempt 1 failed: 503 {"status":503,"success":false,"error":{"code":"SERVICE_UNAVAILABLE","message":"The Classic API is at its limit right now. Retry after 10s, or get full
-  waiting 45s for the free image tier
-  card 6/6 ready
-Built out/post/ with a 6-card devotional post
+THIS RUN: animated
+Gemini gemini-3.8-flash busy (503), retrying
+Gemini gemini-3.8-flash failed: 429 {
+  "error": {
+    "code": 429,
+    "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://aistudio.google.com/do
+Gemini gemini-3.7-flash failed: 429 {
+  "error": {
+    "code": 429,
+    "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://aistudio.google.com/do
+Story written by Gemini (gemini-3.6-flash)
+  reel 1 opening picture via pollinations (the GPU redraws it in the cute style)
+Short idea 1: పాఠశాల తోటలో చిన్న హెచ్చరిక | A cute little lime-green caterpillar named Chinnu with big shiny black eyes, wearing a tiny bright yellow sun cap. AND A fluffy sky-blue baby bird named Ramu with soft feathers and big round eyes, wearing a cozy red wool scarf.
+  Story: పాఠశాల తోటలో చిన్ను అనే పురుగు వర్షం రాబోతుందని పక్షికి చెప్పబోయింది. / పక్షి మాత్రం పాడటంలో మునిగిపోయి చిన్ను మాటలను పట్టించుకోలేదు. / చిన్ను సైగలు చూసి పక్షి చివరకు శ్రద్ధగా వినడం మొదలుపెట్టింది. / వెంటనే పెద్ద ఆకు కింద దాక్కుని ఇద్దరు వర్షం నుండి రక్షించబడ్డారు. / నీతి: ఎదుటివారు చెప్పే మాట శ్రద్ధగా వింటే వచ్చే సమస్యల నుండి సులభంగా బయటపడవచ్చు.
+Story written by Gemini (gemini-3.6-flash)
+  waiting 32s for the free image tier
+  reel 2 opening picture via pollinations (the GPU redraws it in the cute style)
+Short idea 2: అవ్వ వంటగదిలో బుజ్జి నిమ్మకాయ సాహసం | A bright yellow cartoon lemon named Chintu with big expressive eyes, wearing a tiny green baseball cap. AND A plump red cartoon tomato named Bantu with cute wide eyes, wearing a cozy blue scarf.
+  Story: చీకటి నీడను చూసి చిన్న నిమ్మకాయ బిడియంతో వెనక్కి తగ్గింది. / టమోటా మిత్రుడు నవ్వుతూ నిమ్మకాయలో నిండిన ధైర్యాన్ని నింపాడు. / నిమ్మకాయ ఒక్కసారిగా ధైర్యం చేసి చీకటి దాటి దూకింది. / ఇద్దరూ సంతోషంగా గెంతులేస్తూ తమ విజయాన్ని సంబరంగా జరుపుకున్నారు. / నీతి: గుండెల్లో నిజమైన ధైర్యం ఉంటే ఎలాంటి కష్టమైన పనినైనా సులువుగా పూర్తి చేయవచ్చు.
+  Kaggle push: Kernel version 29 successfully pushed.  Please check progress at https://www.kaggle.com/code/saisrehan1/telugu-reel-video
+  Kaggle GPU working... 1 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 2 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 4 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 5 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 7 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 8 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 10 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 11 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 13 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 14 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 16 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 17 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 19 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 20 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 22 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 23 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 25 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 26 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 28 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 29 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 31 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 32 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 34 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 35 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 37 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 38 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 40 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 41 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 43 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 44 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 46 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 47 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 49 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 50 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 52 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 53 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 55 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 56 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 58 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 59 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 61 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 62 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 64 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 65 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 67 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 68 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 70 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 71 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 73 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 74 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 76 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 77 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 79 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 81 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 82 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 84 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 85 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 87 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 88 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 90 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 91 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 93 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 94 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle GPU working... 96 min (n1/telugu-reel-video has status "KernelWorkerStatus.RUNNING")
+  Kaggle finished: saisrehan1/telugu-reel-video has status "KernelWorkerStatus.COMPLETE"
+  Kaggle notebook log (last lines):
+    [gpu0] out = torch.nn.functional.scaled_dot_product_attention(
+    [gpu0] /usr/local/lib/python3.13/dist-packages/diffusers/models/attention_dispatch.py:3953: UserWarning: cuDNN attention has been runtime disabled. (Triggered internally at /pytorch/aten/src/ATen/nati
+    [gpu0] out = torch.nn.functional.scaled_dot_product_attention(
+    [gpu0] memory-efficient attention not possible here (No available kernel. Aborting execution.): using the default
+    [gpu0] scene failed at 480x832, 81 frames (default attention)
+    [gpu1] video model on GPU, free GB: 7.6 | reels [1]
+    [gpu1] attention: memory-efficient
+    [gpu1] upscaler ready: x2
+    [gpu1] out = torch.nn.functional.scaled_dot_product_attention(
+    [gpu1] /usr/local/lib/python3.13/dist-packages/diffusers/models/attention_dispatch.py:3953: UserWarning: Expected query, key and value to all be of dtype: {Half, Float}. Got Query dtype: c10::BFloat16
+    [gpu1] out = torch.nn.functional.scaled_dot_product_attention(
+    [gpu1] /usr/local/lib/python3.13/dist-packages/diffusers/models/attention_dispatch.py:3953: UserWarning: Flash attention kernel not used because: (Triggered internally at /pytorch/aten/src/ATen/native
+    [gpu1] out = torch.nn.functional.scaled_dot_product_attention(
+    [gpu1] /usr/local/lib/python3.13/dist-packages/diffusers/models/attention_dispatch.py:3953: UserWarning: Flash attention has been runtime disabled. (Triggered internally at /pytorch/aten/src/ATen/nati
+    [gpu1] out = torch.nn.functional.scaled_dot_product_attention(
+    [gpu1] /usr/local/lib/python3.13/dist-packages/diffusers/models/attention_dispatch.py:3953: UserWarning: cuDNN attention kernel not used because: (Triggered internally at /pytorch/aten/src/ATen/native
+    [gpu1] out = torch.nn.functional.scaled_dot_product_attention(
+    [gpu1] /usr/local/lib/python3.13/dist-packages/diffusers/models/attention_dispatch.py:3953: UserWarning: cuDNN attention has been runtime disabled. (Triggered internally at /pytorch/aten/src/ATen/nati
+    [gpu1] out = torch.nn.functional.scaled_dot_product_attention(
+    [gpu1] memory-efficient attention not possible here (No available kernel. Aborting execution.): using the default
+    [gpu1] scene failed at 480x832, 81 frames (default attention)
+    [gpu0] reel 1 scene 1 done in 1741 s (at 2177 s)
+    [gpu1] reel 2 scene 1 done in 1723 s (at 2256 s)
+    [gpu0] reel 1 scene 2 done in 1728 s (at 3906 s)
+    [gpu1] reel 2 scene 2 done in 1746 s (at 4003 s)
+    [gpu0] reel 1 scene 3 done in 1732 s (at 5639 s)
+    [gpu0] time budget reached: reel 1 stops after 3 scenes
+    [gpu1] reel 2 scene 3 done in 1748 s (at 5752 s)
+    [gpu1] time budget reached: reel 2 stops after 3 scenes
+    workers finished with exit codes [0, 0] at 5778 s
+  Kaggle made reel 1: 3 scenes, reel 2: 3 scenes in 97 min
+Music: synthesized playful instrumental
+  reel 'పాఠశాల తోటలో చిన్న హెచ్చరిక': 3 animated scenes, 3 narration lines + moral, 21.1s -> out/reel.mp4
+Music: synthesized playful instrumental
+  reel 'అవ్వ వంటగదిలో బుజ్జి నిమ్మకాయ సాహసం': 3 animated scenes, 3 narration lines + moral, 20.3s -> out/queue/reel.mp4
+  second reel saved: it will be posted at the next 'queued' slot
+Built out/reel.mp4 with free animated short (3/4 scenes, continuous) (24.9 MB)
