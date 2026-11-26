@@ -1,4 +1,48 @@
-run at 2026-11-26T15:55:56.984064+00:00 event=schedule
+run at 2026-11-26T18:46:33.942312+00:00 event=schedule
 MODE: PIXAR_STORIES=1 MANUAL_VIDEOS=0 OMNI_VIDEOS=0 | story AI: Gemini | images: free Pollinations
-THIS RUN: queued
-Built out/reel.mp4 with the queued animated reel 'మంచు కొండల్లో తీపి సాయం' (made 0.7 h ago, 3 scenes)
+THIS RUN: post
+Telugu calendar: Karthika masam, Friday, special: -, festivals: -
+Devotional angle: Karthika masam (కార్తీక మాసం): deepam / lamp lighting customs and their meaning
+Gemini gemini-3.8-flash busy (503), retrying
+Gemini gemini-3.8-flash busy (503), retrying
+Gemini gemini-3.8-flash busy (503), retrying
+Gemini gemini-3.8-flash failed: 503 {
+  "error": {
+    "code": 503,
+    "message": "This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.",
+    "status": "UNAVAILABLE"
+  }
+}
+
+Gemini gemini-3.7-flash error: HTTPSConnectionPool(host='generativelanguage.googleapis.com', port=443): Read timed out. (read timeout=100)
+Gemini gemini-3.6-flash busy (503), retrying
+Gemini gemini-3.6-flash busy (503), retrying
+Gemini gemini-3.6-flash busy (503), retrying
+Gemini gemini-3.6-flash failed: 503 {
+  "error": {
+    "code": 503,
+    "message": "This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.",
+    "status": "UNAVAILABLE"
+  }
+}
+
+Story written by Gemini (gemini-3.5-flash-lite)
+Devotional post: కార్తీక దీప వెలుగుల పరమార్థం
+  card 1/6 ready
+  waiting 42s for the free image tier
+  card 2/6 ready
+  waiting 42s for the free image tier
+  card 3/6 ready
+  waiting 42s for the free image tier
+  card 4/6 ready
+  waiting 42s for the free image tier
+  image attempt 1 failed: 503 {"status":503,"success":false,"error":{"code":"SERVICE_UNAVAILABLE","message":"The Classic API is at its limit right now. Retry after 10s, or get full
+  waiting 44s for the free image tier
+  image attempt 2 failed: 503 {"status":503,"success":false,"error":{"code":"SERVICE_UNAVAILABLE","message":"The Classic API is at its limit right now. Retry after 10s, or get full
+  waiting 45s for the free image tier
+  image attempt 3 failed: 503 {"status":503,"success":false,"error":{"code":"SERVICE_UNAVAILABLE","message":"The Classic API is at its limit right now. Retry after 10s, or get full
+  waiting 45s for the free image tier
+  card 5/6 ready
+  waiting 42s for the free image tier
+  card 6/6 ready
+Built out/post/ with a 6-card devotional post
