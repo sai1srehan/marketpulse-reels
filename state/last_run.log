@@ -1,27 +1,23 @@
-run at 2026-11-26T21:43:23.756732+00:00 event=schedule
+run at 2026-11-27T00:55:06.536541+00:00 event=schedule
 MODE: PIXAR_STORIES=1 MANUAL_VIDEOS=0 OMNI_VIDEOS=0 | story AI: Gemini | images: free Pollinations
 THIS RUN: post
 Telugu calendar: Karthika masam, Friday, special: -, festivals: -
-Devotional angle: Karthika masam (కార్తీక మాసం): simple daily pooja and good habits for the whole family
-Gemini gemini-3.8-flash error: HTTPSConnectionPool(host='generativelanguage.googleapis.com', port=443): Read timed out. (read timeout=100)
-Gemini gemini-3.7-flash error: HTTPSConnectionPool(host='generativelanguage.googleapis.com', port=443): Read timed out. (read timeout=100)
-Story written by Gemini (gemini-3.6-flash)
-Devotional post attempt 1 failed: too similar to an earlier post
-Story written by Gemini (gemini-3.6-flash)
-Devotional post: కార్తీక మాసంలో కుటుంబ సదాచారాలు
-  image attempt 1 failed: 503 {"status":503,"success":false,"error":{"code":"SERVICE_UNAVAILABLE","message":"The Classic API is at its limit right now. Retry after 10s, or get full
-  waiting 45s for the free image tier
-  image attempt 2 failed: 503 {"status":503,"success":false,"error":{"code":"SERVICE_UNAVAILABLE","message":"The Classic API is at its limit right now. Retry after 10s, or get full
-  waiting 45s for the free image tier
+Devotional angle: Karthika masam (కార్తీక మాసం): why this month is special and what people do every day of it
+Story written by Gemini (gemini-3.8-flash)
+Devotional post: కార్తీక మాస దినచర్య విశిష్టత
   card 1/6 ready
-  waiting 42s for the free image tier
+  waiting 43s for the free image tier
   card 2/6 ready
   waiting 43s for the free image tier
+  image attempt 1 failed: 503 {"status":503,"success":false,"error":{"code":"SERVICE_UNAVAILABLE","message":"The Classic API is at its limit right now. Retry after 10s, or get full
+  waiting 45s for the free image tier
   card 3/6 ready
-  waiting 43s for the free image tier
+  waiting 44s for the free image tier
+  image attempt 1 failed: 503 {"status":503,"success":false,"error":{"code":"SERVICE_UNAVAILABLE","message":"The Classic API is at its limit right now. Retry after 10s, or get full
+  waiting 45s for the free image tier
   card 4/6 ready
-  waiting 43s for the free image tier
-  card 5/6 ready
   waiting 42s for the free image tier
+  card 5/6 ready
+  waiting 43s for the free image tier
   card 6/6 ready
 Built out/post/ with a 6-card devotional post
