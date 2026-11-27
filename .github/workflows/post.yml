@@ -5,13 +5,11 @@ on:
     paths:
       - "inbox/**"
   schedule:
-    # something every 3 hours (SLOT_PLAN, India time):
-    #   05:30 devotional post | 08:30 devotional post | 11:30 Kaggle makes 2 story reels -> reel 1 posts ~1:30 PM
-    #   14:30 reel 2 (saved) | 17:30 Kaggle makes 2 more -> reel 3 posts ~7:30 PM | 20:30 reel 4 (saved)
-    #   23:30 devotional post | 02:30 devotional post
-    # = 4 animated story reels + 4 devotional image posts (month, festival, pooja, foods) a day;
+    # 4 animated story videos a day (SLOT_PLAN, India time):
+    #   06:30 Kaggle makes 2 videos -> video 1 posts ~08:30 | 12:30 video 2 (saved)
+    #   16:30 Kaggle makes 2 more  -> video 3 posts ~18:30 | 21:30 video 4 (saved, Telugu prime time)
     # 2 Kaggle sessions a day stay inside the free 30 GPU hours a week.
-    - cron: "0 */3 * * *"
+    - cron: "0 1,7,11,16 * * *"
   workflow_dispatch:
     inputs:
       dry_run:
@@ -87,7 +85,7 @@ jobs:
           REEL_FORMAT: ${{ inputs.format || 'auto' }}
           SLOT_PLAN: ${{ vars.SLOT_PLAN }}
           REELS_PER_RUN: ${{ vars.REELS_PER_RUN || '2' }}
-          FALLBACK_POST: ${{ vars.FALLBACK_POST || '1' }}
+          FALLBACK_POST: ${{ vars.FALLBACK_POST || '0' }}
           SHORT_BEATS: ${{ vars.SHORT_BEATS || '4' }}
           SHORT_STEPS: ${{ vars.SHORT_STEPS || '4' }}
           PIXAR_CLIPS: ${{ vars.PIXAR_CLIPS || '0' }}

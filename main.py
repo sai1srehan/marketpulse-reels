@@ -2210,15 +2210,16 @@ def build_caption(idea, post=False):
                           " ".join(tags[:limit])])[:2200]
     facts = idea.get("kind") == "facts"
     core = [t.strip() for t in (os.getenv("FACT_HASHTAGS", "#telugu,#telugufacts,#telugureels,#facts") if facts else
-                                os.getenv("HASHTAGS", "#telugu,#telugureels,#moralstories,#animation")).split(",") if t.strip()]
-    popular_themes = {"#friendship", "#kindness", "#family", "#love", "#motivation", "#honesty", "#nature", "#mother",
-                      "#funny", "#cute", "#emotional", "#inspiration", "#teamwork", "#respect", "#helping"}
-    rotating = ["#storytime", "#kidsstories", "#3danimation", "#cartoon", "#telugustories", "#kidsvideos", "#pixar"]
+                                # the two biggest Telugu reel tags + Telugu story niche + story niche (+1 reach tag below)
+                                os.getenv("HASHTAGS", "#telugu,#telugureels,#telugukathalu,#moralstories")).split(",") if t.strip()]
+    # 5th tag rotates through big discovery tags so every reel reaches a slightly different audience
+    rotating = [t.strip() for t in os.getenv("ROTATING_HASHTAGS", "#trending,#viral,#explorepage,#reelsinstagram,#trendingreels,"
+                                             "#viralreels,#kidsstories,#animation,#cartoon,#teluguviral").split(",") if t.strip()]
     tag = str(idea.get("tag", "")).lower()
     if facts:   # fact reels: the subject's own tag (#space, #gold ...) is usually a big one
         pick = tag if re.fullmatch(r"#[a-z0-9_]{3,30}", tag) else "#didyouknow"
     else:
-        pick = tag if tag in popular_themes else rotating[int(hashlib.md5(idea["title"].encode()).hexdigest(), 16) % len(rotating)]
+        pick = rotating[int(hashlib.md5(idea["title"].encode()).hexdigest(), 16) % len(rotating)]
     tag_list = []
     for tg in core + [pick]:
         if tg not in tag_list:
@@ -2231,11 +2232,14 @@ def build_caption(idea, post=False):
                           "రోజూ ఇలాంటి ఆసక్తికరమైన విషయాల కోసం ఫాలో అవ్వండి ❤️", "",
                           "మీకు తెలుసా | తెలుగు ఫ్యాక్ట్స్ | Telugu facts | Did you know", "",
                           " ".join(tag_list[:limit])])[:2200]
-    return "\n".join([f"📖 {idea['title']}", "", idea["caption"], "", f"నీతి: {idea['moral']}", "",
-                      "ఈ రీల్ మీ స్నేహితుడికి పంపండి 💌", (idea.get("question") or "మీకు నచ్చిందా? కామెంట్‌లో చెప్పండి") + " 👇",
+    # Instagram now ranks reels by the WORDS in the caption (search + recommendations) more than by hashtags,
+    # so the first line and a keyword line name the reel in Telugu and English.
+    return "\n".join([f"📖 {idea['title']} | తెలుగు నీతి కథ", "", idea["caption"], "", f"నీతి: {idea['moral']}", "",
+                      "చివరి వరకు చూడండి, ఈ కథ మీ పిల్లలకు & ఫ్రెండ్స్‌కి షేర్ చేయండి 💌",
+                      (idea.get("question") or "మీకు నచ్చిందా? కామెంట్‌లో చెప్పండి") + " 👇",
                       "రోజూ కొత్త కథల కోసం ఫాలో అవ్వండి ❤️", "",
-                      # Instagram search reads caption words, so name what the reel is in both languages
-                      "తెలుగు నీతి కథలు | Telugu moral stories | Telugu animated kids story", "",
+                      "తెలుగు కథలు | నీతి కథలు | చందమామ కథలు | పిల్లల కథలు | Telugu moral stories | Telugu kathalu | "
+                      "Telugu cartoon story | Telugu animated story | Telugu kids stories", "",
                       " ".join(tag_list[:limit])])[:2200]
 
 
@@ -3421,7 +3425,9 @@ def generate_devotional_post(state, ig_titles):
         return False
 
 
-SLOT_PLAN_DEFAULT = "0:post,3:post,6:animated,9:queued,12:animated,15:queued,18:post,21:post"
+# story videos only (UTC hours). Kaggle starts 06:30 IST -> video 1 ~08:30 IST | saved video 2 at 12:30 IST |
+# Kaggle starts 16:30 IST -> video 3 ~18:30 IST | saved video 4 at 21:30 IST (Telugu prime time)
+SLOT_PLAN_DEFAULT = "1:animated,7:queued,11:animated,16:queued"
 
 
 def slot_task():
@@ -3430,13 +3436,16 @@ def slot_task():
     if fmt in ("animated", "queued", "trending", "post", "factpost"):
         return fmt
     now = dt.datetime.now(dt.timezone.utc)
-    slot = round((now.hour + now.minute / 60) / 3) * 3 % 24   # a late-starting run still counts as its slot
+    hour = now.hour + now.minute / 60
     plan = {}
     for item in (os.getenv("SLOT_PLAN") or SLOT_PLAN_DEFAULT).split(","):
         h, _, task = item.partition(":")
         if h.strip().isdigit():
             plan[int(h)] = task.strip().lower()
-    return plan.get(slot, "post")
+    # the planned hour nearest to now (GitHub often starts scheduled runs late)
+    gap = lambda h: min((hour - h) % 24, (h - hour) % 24)
+    best = min(plan, key=gap, default=None)
+    return plan[best] if best is not None and gap(best) <= 1.25 else "none"
 
 
 # -------------------------------- manual mode: you make the clip with your own Gemini plan, the bot does the rest
@@ -3712,11 +3721,11 @@ def generate():
         task = slot_task()
         print(f"THIS RUN: {task}")
         made = {"post": generate_devotional_post, "factpost": generate_fact_post, "queued": post_queued,
-                "trending": generate_trend_reel, "animated": generate_pixar_short}.get(task, generate_devotional_post)(state, ig)
+                "trending": generate_trend_reel, "animated": generate_pixar_short}.get(task, lambda s, i: False)(state, ig)
         if made:
             return
-        # a story reel that could not be made: a devotional post keeps the slot filled (no fact reels)
-        if task in ("animated", "queued") and os.getenv("FALLBACK_POST", "1") == "1":
+        # story videos only by default; FALLBACK_POST=1 fills a failed slot with a devotional image post
+        if task in ("animated", "queued") and os.getenv("FALLBACK_POST", "0") == "1":
             print(f"Nothing from '{task}' this slot: posting a devotional image post instead.")
             if generate_devotional_post(state, ig):
                 return
