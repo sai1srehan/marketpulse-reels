@@ -17,9 +17,9 @@ on:
         type: boolean
         default: true
       format:
-        description: "auto = by time slot; animated = 2 Kaggle story reels; queued = post the saved reel; post = devotional image post; factpost = fact image post; trending = fact reel"
+        description: "auto = by time slot; animated = make 2 story reels on Kaggle (posts 1, saves 1); queued = post the saved story reel"
         type: choice
-        options: [auto, animated, queued, post, factpost, trending]
+        options: [auto, animated, queued]
         default: auto
 
 permissions:
@@ -85,7 +85,7 @@ jobs:
           REEL_FORMAT: ${{ inputs.format || 'auto' }}
           SLOT_PLAN: ${{ vars.SLOT_PLAN }}
           REELS_PER_RUN: ${{ vars.REELS_PER_RUN || '2' }}
-          FALLBACK_POST: ${{ vars.FALLBACK_POST || '0' }}
+          FALLBACK_POST: "0"   # story reels only: never fill a slot with an image post
           SHORT_BEATS: ${{ vars.SHORT_BEATS || '4' }}
           SHORT_STEPS: ${{ vars.SHORT_STEPS || '4' }}
           PIXAR_CLIPS: ${{ vars.PIXAR_CLIPS || '0' }}

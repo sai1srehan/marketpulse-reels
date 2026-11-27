@@ -3440,7 +3440,7 @@ def slot_task():
     plan = {}
     for item in (os.getenv("SLOT_PLAN") or SLOT_PLAN_DEFAULT).split(","):
         h, _, task = item.partition(":")
-        if h.strip().isdigit():
+        if h.strip().isdigit() and task.strip().lower() in ("animated", "queued"):   # story reels only, never posts
             plan[int(h)] = task.strip().lower()
     # the planned hour nearest to now (GitHub often starts scheduled runs late)
     gap = lambda h: min((hour - h) % 24, (h - hour) % 24)
